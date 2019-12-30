@@ -1,0 +1,124 @@
+From 50782f658313574a530f80d2f4b78fe23488c6c2 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Thu, 20 Dec 2018 04:55:38 +0000
+Subject: [PATCH] support compile kpatch on aarch64
+
+delete __x86_64__ to support compile kpatch on aarch64.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/Makefile             |  3 +++
+ kpatch-build/create-diff-object.c | 16 +---------------
+ 2 files changed, 4 insertions(+), 15 deletions(-)
+
+diff --git a/kpatch-build/Makefile b/kpatch-build/Makefile
+index 232b336..974e0f2 100644
+--- a/kpatch-build/Makefile
++++ b/kpatch-build/Makefile
+@@ -12,6 +12,9 @@ SOURCES = create-diff-object.c kpatch-elf.c \
+ ifeq ($(ARCH),x86_64)
+ SOURCES += insn/insn.c insn/inat.c
+ INSN     = insn/insn.o insn/inat.o
++else ifeq ($(ARCH),aarch64)
++SOURCES += insn/insn.c insn/inat.c
++INSN     = insn/insn.o insn/inat.o
+ else ifeq ($(ARCH),ppc64le)
+ SOURCES += gcc-plugins/ppc64le-plugin.c
+ PLUGIN   = gcc-plugins/ppc64le-plugin.so
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 97ae0d4..80a76a9 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -426,7 +426,6 @@ out:
+ 		log_debug("section %s has changed\n", sec->name);
+ }
+ 
+-#ifdef __x86_64__
+ /*
+  * Determine if a section has changed only due to a WARN* or might_sleep
+  * macro call's embedding of the line number into an instruction operand.
+@@ -537,7 +536,7 @@ static int kpatch_line_macro_change_only(struct section *sec)
+ 
+ 	return 1;
+ }
+-#elif __powerpc64__
++#if __powerpc64__
+ #define PPC_INSTR_LEN 4
+ #define PPC_RA_OFFSET 16
+ 
+@@ -603,11 +602,6 @@ static int kpatch_line_macro_change_only(struct section *sec)
+ 
+ 	return 1;
+ }
+-#else
+-static int kpatch_line_macro_change_only(struct section *sec)
+-{
+-	return 0;
+-}
+ #endif
+ #define ARM64_INSTR_LEN 4
+ static int arm64_kpatch_line_macro_change_only(struct section *sec)
+@@ -1248,7 +1242,6 @@ static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
+ 	kpatch_compare_symbols(&kelf->symbols);
+ }
+ 
+-#ifdef __x86_64__
+ static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
+ {
+ 	unsigned long insn_addr, start, end, rela_addr;
+@@ -1267,7 +1260,6 @@ static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
+ 			return;
+ 	}
+ }
+-#endif
+ 
+ /*
+  * Mangle the relas a little.  The compiler will sometimes use section symbols
+@@ -1810,7 +1802,6 @@ static int ex_table_group_size(struct kpatch_elf *kelf, int offset)
+ 	return size;
+ }
+ 
+-#ifdef __x86_64__
+ static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
+ {
+ 	static int size = 0;
+@@ -1845,7 +1836,6 @@ static int smp_locks_group_size(struct kpatch_elf *kelf, int offset)
+ {
+ 	return 4;
+ }
+-#endif
+ #ifdef __powerpc64__
+ static int fixup_entry_group_size(struct kpatch_elf *kelf, int offset)
+ {
+@@ -1921,7 +1911,6 @@ static struct special_section special_sections[] = {
+ 		.name		= "__bug_table",
+ 		.group_size	= bug_table_group_size,
+ 	},
+-#ifdef __x86_64__
+ 	{
+ 		.name		= ".smp_locks",
+ 		.group_size	= smp_locks_group_size,
+@@ -1930,7 +1919,6 @@ static struct special_section special_sections[] = {
+ 		.name		= ".parainstructions",
+ 		.group_size	= parainstructions_group_size,
+ 	},
+-#endif
+ 	{
+ 		.name		= ".fixup",
+ 		.group_size	= fixup_group_size,
+@@ -1939,12 +1927,10 @@ static struct special_section special_sections[] = {
+ 		.name		= "__ex_table", /* must come after .fixup */
+ 		.group_size	= ex_table_group_size,
+ 	},
+-#ifdef __x86_64__
+ 	{
+ 		.name		= ".altinstructions",
+ 		.group_size	= altinstructions_group_size,
+ 	},
+-#endif
+ #ifdef __powerpc64__
+ 	{
+ 		.name		= "__ftr_fixup",
+-- 
+2.19.1
+

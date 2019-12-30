@@ -1,0 +1,96 @@
+From d53b2d1f87f5e891ba8f6945765134da9ee2d29d Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Thu, 7 Mar 2019 14:38:15 +0000
+Subject: [PATCH] add find_special_section_data_arm64 for arm64
+
+arm64 kernel have no paravirt_patch_site or orc_entry structure
+in vmlinux, we don't need to check these two struct for arm64.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/kpatch-build | 56 ++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 55 insertions(+), 1 deletion(-)
+
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index 18f79d4..59af250 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -266,12 +266,66 @@ find_special_section_data_ppc64le() {
+ 	return
+ }
+ 
++find_special_section_data_arm64() {
++
++	# If $AWK_OPTIONS are blank gawk would treat "" as a blank script
++	# shellcheck disable=SC2086
++	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
++		gawk --non-decimal-data $AWK_OPTIONS '
++		BEGIN { a = b = e = c = f = s = i = r = j = h = 0 }
++
++		# Set state if name matches
++		a == 0 && /DW_AT_name.* alt_instr[[:space:]]*$/ {a = 1; next}
++		b == 0 && /DW_AT_name.* bug_entry[[:space:]]*$/ {b = 1; next}
++		e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
++		c == 0 && /DW_AT_name.* klp_func[[:space:]]*$/ {c = 1; next}
++		j == 0 && /DW_AT_name.* klp_object[[:space:]]*$/ {j = 1; next}
++
++		# Reset state unless this abbrev describes the struct size
++		a == 1 && !/DW_AT_byte_size/ { a = 0; next }
++		b == 1 && !/DW_AT_byte_size/ { b = 0; next }
++		e == 1 && !/DW_AT_byte_size/ { e = 0; next }
++		c == 1 && /DW_TAG_structure_type/ { c = 3; next }
++		j == 1 && /DW_TAG_structure_type/ { j = 3; next }
++		c == 1 && /DW_AT_name.* force[[:space:]]*$/ {f = 2; next}
++		c == 1 && /DW_AT_name.* old_sympos[[:space:]]*$/ {s = 2; next}
++		i == 1 && /DW_AT_name.* immediate[[:space:]]*$/ {i = 2; next}
++		j == 1 && /DW_AT_name.* relocs[[:space:]]*$/ {r = 2; next}
++		j == 1 && /DW_AT_name.* hooks_load[[:space:]]*$/ {h = 2; next}
++
++		# Now that we know the size, stop parsing for it
++		a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
++		b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
++		e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
++		f == 2 {printf("export KLP_SUPPORT_FORCE=y\n"); f = 3}
++		s == 2 {printf("export KLP_SUPPORT_OLD_SYMPOS=y\n"); s = 3}
++		i == 2 {printf("export KLP_SUPPORT_IMMEDIATE=y\n"); i = 3}
++		r == 2 {printf("export KLP_SUPPORT_RELOCS=y\n"); r = 3}
++		h == 2 {printf("export KLP_SUPPORT_LOADHOOKS=y\n"); h = 3}
++
++		# Bail out once we have everything
++		a == 2 && b == 2 && e == 2 && c == 3 && j == 3 {exit}')"
++
++	[[ -n "$SPECIAL_VARS" ]] && eval "$SPECIAL_VARS"
++
++	[[ -z "$ALT_STRUCT_SIZE" ]] && die "can't find special struct alt_instr size"
++	[[ -z "$BUG_STRUCT_SIZE" ]] && die "can't find special struct bug_entry size"
++	[[ -z "$EX_STRUCT_SIZE" ]]  && die "can't find special struct exception_table_entry size"
++
++	return
++}
++
+ find_special_section_data() {
+ 	if [[ "$ARCH" = "ppc64le" ]]; then
+ 		find_special_section_data_ppc64le
+ 		return
+ 	fi
+ 
++	if [[ "$ARCH" = "arm64" ]]; then
++		find_special_section_data_arm64
++		return
++	fi
++
+ 	[[ "$CONFIG_PARAVIRT" -eq 0 ]] && AWK_OPTIONS="-vskip_p=1"
+ 	[[ "$CONFIG_UNWINDER_ORC" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_o=1"
+ 
+@@ -323,7 +377,7 @@ find_special_section_data() {
+ 
+ 	[[ -z "$ALT_STRUCT_SIZE" ]] && die "can't find special struct alt_instr size"
+ 	[[ -z "$BUG_STRUCT_SIZE" ]] && die "can't find special struct bug_entry size"
+-	[[ -z "$EX_STRUCT_SIZE" ]]  && die "can't find special struct paravirt_patch_site size"
++	[[ -z "$EX_STRUCT_SIZE" ]]  && die "can't find special struct exception_table_entry size"
+ 	[[ -z "$PARA_STRUCT_SIZE" && "$CONFIG_PARAVIRT" -ne 0 ]] && die "can't find special struct paravirt_patch_site size"
+ 	[[ -z "$ORC_STRUCT_SIZE" && "$CONFIG_UNWINDER_ORC" -ne 0 ]] && die "can't find special struct orc_entry size"
+ 
+-- 
+2.19.1
+

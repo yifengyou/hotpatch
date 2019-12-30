@@ -1,0 +1,65 @@
+#!/bin/bash
+# Copyright (C) 2019. Huawei Technologies Co., Ltd. All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 and
+# only version 2 as published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+
+exe_tool=`which os_hotpatch`
+fn_help()
+{
+cat <<EOFE
+Usage: livepatch -l/--load -r/--remove -a/--activate -d/--deactivate <patch>
+		 -q[patch]/--query[=patch]
+		 -h/--help -v/--version
+e.g. : livepatch --load <patch archive name>
+EOFE
+}
+if [ "$1" = "-q" -o "$1" = "--query"  ];then
+	$exe_tool -q all
+	exit 0
+fi
+input_args=`getopt -a -o l:a:r:d:q:v -l load:,activate:,remove:,deactivate:,query:,help,version  -- "$@" 2>&1`
+eval set -- "${input_args}"
+while true;
+do
+        case "$1" in
+                -l|--load)
+			$exe_tool -l "$2"
+                        exit $?
+                        ;;
+                -a|--activate)
+                        $exe_tool -a "klp_${2#klp_}"
+                        exit $?
+                        ;;
+                -d|--deactivate)
+                        $exe_tool -r "klp_${2#klp_}"
+                        exit $?
+                        ;;
+                -r|--remove)
+                        $exe_tool -d "klp_${2#klp_}"
+                        exit $?
+                        ;;
+                -q|--query)
+                        $exe_tool -q "klp_${2#klp_}"
+                        exit $?
+                        ;;
+                -h|--help)
+                        fn_help 
+                        exit 0
+                        ;;
+                -v|--version)
+			echo "LKP:livepatch version 2.0-00000"
+			exit 0
+			;;
+                *)
+                        fn_help 
+                        exit 1
+                        ;;
+        esac
+done

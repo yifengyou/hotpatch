@@ -1,0 +1,118 @@
+From 87203483495fec8ad1394def83fa884a96b711ec Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Thu, 14 Feb 2019 14:21:20 +0000
+Subject: [PATCH] kpatch-build: adapt for native compile_env
+
+we check vmlinux to determine if klp_func and klp_object
+have some members and set flag for livepatch-patch-hook.c.
+support arm64 native compile enviroment.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/kpatch-build |   46 ++++++++++++++++++++++++++++++++++----------
+ 1 files changed, 35 insertions(+), 11 deletions(-)
+
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index c227b44..18f79d4 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -279,7 +279,7 @@ find_special_section_data() {
+ 	# shellcheck disable=SC2086
+ 	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
+ 		gawk --non-decimal-data $AWK_OPTIONS '
+-		BEGIN { a = b = p = e = o = f = 0 }
++		BEGIN { a = b = p = e = o = c = f = s = i = r = j = h = 0 }
+ 
+ 		# Set state if name matches
+ 		a == 0 && /DW_AT_name.* alt_instr[[:space:]]*$/ {a = 1; next}
+@@ -287,7 +287,8 @@ find_special_section_data() {
+ 		p == 0 && /DW_AT_name.* paravirt_patch_site[[:space:]]*$/ {p = 1; next}
+ 		e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
+ 		o == 0 && /DW_AT_name.* orc_entry[[:space:]]*$/ {o = 1; next}
+-                f == 0 && /DW_AT_name.* klp_func[[:space:]]*$/ {f = 1; next}
++		c == 0 && /DW_AT_name.* klp_func[[:space:]]*$/ {c = 1; next}
++		j == 0 && /DW_AT_name.* klp_object[[:space:]]*$/ {j = 1; next}
+ 
+ 		# Reset state unless this abbrev describes the struct size
+ 		a == 1 && !/DW_AT_byte_size/ { a = 0; next }
+@@ -295,8 +296,13 @@ find_special_section_data() {
+ 		p == 1 && !/DW_AT_byte_size/ { p = 0; next }
+ 		e == 1 && !/DW_AT_byte_size/ { e = 0; next }
+ 		o == 1 && !/DW_AT_byte_size/ { o = 0; next }
+-                f == 1 && /DW_TAG_structure_type/ { f = 3; next }
+-		f == 1 && /DW_AT_name.* force[[:space:]]*$/ {f = 2; next}
++		c == 1 && /DW_TAG_structure_type/ { c = 3; next }
++		j == 1 && /DW_TAG_structure_type/ { j = 3; next }
++		c == 1 && /DW_AT_name.* force[[:space:]]*$/ {f = 2; next}
++		c == 1 && /DW_AT_name.* old_sympos[[:space:]]*$/ {s = 2; next}
++		i == 1 && /DW_AT_name.* immediate[[:space:]]*$/ {i = 2; next}
++		j == 1 && /DW_AT_name.* relocs[[:space:]]*$/ {r = 2; next}
++		j == 1 && /DW_AT_name.* hooks_load[[:space:]]*$/ {h = 2; next}
+ 
+ 		# Now that we know the size, stop parsing for it
+ 		a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
+@@ -304,10 +310,14 @@ find_special_section_data() {
+ 		p == 1 {printf("export PARA_STRUCT_SIZE=%d\n", $4); p = 2}
+ 		e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
+ 		o == 1 {printf("export ORC_STRUCT_SIZE=%d\n", $4); o = 2}
+-                f == 2 {printf("export KLP_SUPPORT_FORCE=y\n"); f = 3}
++		f == 2 {printf("export KLP_SUPPORT_FORCE=y\n"); f = 3}
++		s == 2 {printf("export KLP_SUPPORT_OLD_SYMPOS=y\n"); s = 3}
++		i == 2 {printf("export KLP_SUPPORT_IMMEDIATE=y\n"); i = 3}
++		r == 2 {printf("export KLP_SUPPORT_RELOCS=y\n"); r = 3}
++		h == 2 {printf("export KLP_SUPPORT_LOADHOOKS=y\n"); h = 3}
+ 
+ 		# Bail out once we have everything
+-		a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 && (o == 2 || skip_o) && f == 3 {exit}')"
++		a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 && (o == 2 || skip_o) && c == 3 && j == 3 {exit}')"
+ 
+ 	[[ -n "$SPECIAL_VARS" ]] && eval "$SPECIAL_VARS"
+ 
+@@ -406,7 +416,9 @@ arch_export() {
+ 		export GCC_ADD_OPTION=
+ 	elif [[ $E_MACHINE -eq 183 ]]; then
+ 		export ARCH=arm64
+-		export ARCH_COMPILE=aarch64-linux-gnu-
++		if [ $(arch) != "aarch64" ]; then
++			export ARCH_COMPILE=aarch64-linux-gnu-
++		fi
+ 		export ENDIAN=little
+ 		if grep "\-mlong-calls" $SRCDIR/Makefile > /dev/null; then
+ 			export GCC_ADD_OPTION="-fno-section-anchors -mlong-calls"
+@@ -953,10 +965,6 @@ if "$KPATCH_MODULE"; then
+ 	export KCPPFLAGS="-D__KPATCH_MODULE__"
+ fi
+ 
+-if grep "hulk" $SRCDIR/Makefile > /dev/null; then
+-	export KCPPFLAGS="-D__HULK__ $KCPPFLAGS"
+-fi
+-
+ if [[ -n "$NO_STACK_CHECK" ]];then
+ 	export KCPPFLAGS="-D__ALL_FORCE__ $KCPPFLAGS"
+ fi
+@@ -965,6 +973,22 @@ if [[ -n "$KLP_SUPPORT_FORCE" ]];then
+ 	export KCPPFLAGS="-D__KLP_SUPPORT_FORCE__ $KCPPFLAGS"
+ fi
+ 
++if [[ -n "$KLP_SUPPORT_OLD_SYMPOS" ]];then
++	export KCPPFLAGS="-DHAVE_SYMPOS $KCPPFLAGS"
++fi
++
++if [[ -n "$KLP_SUPPORT_IMMEDIATE" ]];then
++	export KCPPFLAGS="-DHAVE_IMMEDIATE $KCPPFLAGS"
++fi
++
++if [[ -n "$KLP_SUPPORT_RELOCS" ]];then
++	export KCPPFLAGS="-DHAVE_ELF_RELOCS $KCPPFLAGS"
++fi
++
++if [[ -n "$KLP_SUPPORT_LOADHOOKS" ]];then
++	export KCPPFLAGS="-DHAVE_LOADHOOKS $KCPPFLAGS"
++fi
++
+ echo "Building patch module: $MODNAME.ko"
+ 
+ if [[ -z "$USERSRCDIR" ]] && [[ "$DISTRO" = ubuntu ]]; then
+-- 
+1.7.5.4
+

@@ -1,0 +1,28 @@
+From f221fbe8ff0c22b61aaf42687f5ece04f10ec403 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Thu, 17 Jan 2019 20:50:25 +0000
+Subject: [PATCH] kpatch-build: adapt for ksymtab in 4.19 kernel
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/create-diff-object.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index f075671..2ddd00d 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -1664,8 +1664,8 @@ static int kpatch_include_new_static_var(struct kpatch_elf *kelf)
+ 
+         list_for_each_entry(sym, &kelf->symbols, list) {
+                 if (sym->status == NEW &&
+-                        sym->type == STT_OBJECT &&
+-                        sym->bind == STB_LOCAL)
++                        sym->bind == STB_LOCAL &&
++                        (sym->type == STT_OBJECT || (sym->type == STT_NOTYPE && sym->name[0] != '$')))
+                         kpatch_include_symbol(sym);
+         }
+ 
+-- 
+1.7.5.4
+

@@ -1,0 +1,45 @@
+From aaaec2d292b7e1d07c35e07ba92917ee05a4a141 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Fri, 2 Nov 2018 17:25:03 +0000
+Subject: [PATCH 1008/1015] livepatch-patch-hook: support force enable/disable
+ function
+
+we use immediate to indicate patch which bypass stack check.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kmod/patch/livepatch-patch-hook.c |   11 +++++++++++
+ 1 files changed, 11 insertions(+), 0 deletions(-)
+
+diff --git a/kmod/patch/livepatch-patch-hook.c b/kmod/patch/livepatch-patch-hook.c
+index 2c0cadd..625ffbd 100644
+--- a/kmod/patch/livepatch-patch-hook.c
++++ b/kmod/patch/livepatch-patch-hook.c
+@@ -228,6 +228,16 @@ extern struct kpatch_pre_patch_callback __kpatch_callbacks_pre_patch[], __kpatch
+ extern struct kpatch_post_patch_callback __kpatch_callbacks_post_patch[], __kpatch_callbacks_post_patch_end[];
+ extern struct kpatch_pre_unpatch_callback __kpatch_callbacks_pre_unpatch[], __kpatch_callbacks_pre_unpatch_end[];
+ extern struct kpatch_post_unpatch_callback __kpatch_callbacks_post_unpatch[], __kpatch_callbacks_post_unpatch_end[];
++extern unsigned long __kpatch_force_funcs[], __kpatch_force_funcs_end[];
++
++static int patch_is_func_forced(unsigned long addr)
++{
++	unsigned long *a;
++	for (a = __kpatch_force_funcs; a < __kpatch_force_funcs_end; a++)
++		if (*a == addr)
++			return 1;
++	return 0;
++}
+ 
+ #ifdef HAVE_CALLBACKS
+ static int add_callbacks_to_patch_objects(void)
+@@ -393,6 +403,7 @@ static int __init patch_init(void)
+ 			lfunc = &lfuncs[j];
+ 			lfunc->old_name = func->kfunc->name;
+ 			lfunc->new_func = (void *)func->kfunc->new_addr;
++			lfunc->immediate = patch_is_func_forced(lfunc->new_func);
+ #ifdef HAVE_SYMPOS
+ 			lfunc->old_sympos = func->kfunc->sympos;
+ #else
+-- 
+1.7.5.4
+

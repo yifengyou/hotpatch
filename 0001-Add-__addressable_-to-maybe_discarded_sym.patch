@@ -1,0 +1,35 @@
+From 722d27f6bdd4fa012e08db784bf9bb93bb75be2c Mon Sep 17 00:00:00 2001
+From: Artem Savkov <asavkov@redhat.com>
+Date: Tue, 16 Oct 2018 16:05:01 +0200
+Subject: [PATCH] Add "__addressable_" to maybe_discarded_sym().
+
+Starting with 1b1eeca7e4c1 "init: allow initcall tables to be emitted using
+relative references" [1] __init functions are generating an "__addressable_"
+symbol in a ".discarded.addressable" section so it does not show up in final
+vmlinux triggering find_local_syms failures. Add "_addressable_" to the list
+in maybe_discarded_sym().
+
+[1] https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1b1eeca7e4c19fa76d409d4c7b338dba21f2df45
+
+Signed-off-by: Artem Savkov <asavkov@redhat.com>
+---
+ kpatch-build/lookup.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/kpatch-build/lookup.c b/kpatch-build/lookup.c
+index b88dc59..7c8e635 100644
+--- a/kpatch-build/lookup.c
++++ b/kpatch-build/lookup.c
+@@ -80,7 +80,8 @@ static int maybe_discarded_sym(const char *name)
+ 	 */
+ 	if (!strncmp(name, "__exitcall_", 11) ||
+ 	    !strncmp(name, "__brk_reservation_fn_", 21) ||
+-	    !strncmp(name, "__func_stack_frame_non_standard_", 32))
++	    !strncmp(name, "__func_stack_frame_non_standard_", 32) ||
++	    !strncmp(name, "__addressable_", 14))
+ 		return 1;
+ 
+ 	return 0;
+-- 
+1.7.12.4
+

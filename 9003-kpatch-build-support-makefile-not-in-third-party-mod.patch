@@ -1,0 +1,92 @@
+From 214de7459555f3f0461cf4127c55f727ccf473d1 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Fri, 2 Nov 2018 17:24:30 +0000
+Subject: [PATCH 1003/1015] kpatch-build: support makefile not in third party
+ module source directory
+
+support makefile not in third party module source directory.
+for example:
+        testmod/build/Makefile
+        testmod/src/test.c
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/kpatch-build |   32 +++++++++++++++++++++++++++-----
+ 1 files changed, 27 insertions(+), 5 deletions(-)
+
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index ccef86d..93a0589 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -311,7 +311,10 @@ find_parent_obj() {
+ 	dir="$(dirname "$1")"
+ 	absdir="$(readlink -f "$dir")"
+ 	pwddir="$(readlink -f .)"
+-	pdir="${absdir#$pwddir/}"
++	pdir="."
++	if [ "$absdir" != "$pwddir" ];then
++		pdir="${absdir#$pwddir/}"
++	fi
+ 	file="$(basename "$1")"
+ 	grepname="${1%.o}"
+ 	grepname="$grepname\\.o"
+@@ -326,6 +329,11 @@ find_parent_obj() {
+ 			num="$(find . -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fvc "$pdir/.${file}.cmd")"
+ 			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
+ 		fi
++		if [[ "$num" -eq 0 ]]; then
++			parent="$(find $USERMODBUILDDIR -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fv "$pdir/.${file}.cmd" | head -n1)"
++			num="$(find $USERMODBUILDDIR -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fvc "$pdir/.${file}.cmd")"
++			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
++		fi
+ 	else
+ 		parent="$(grep -l "$grepname" "$dir"/.*.cmd | grep -Fv "$dir/.${file}.cmd" | head -n1)"
+ 		num="$(grep -l "$grepname" "$dir"/.*.cmd | grep -Fvc "$dir/.${file}.cmd")"
+@@ -730,16 +738,24 @@ find_special_section_data
+ if [[ $DEBUG -ge 4 ]]; then
+ 	export KPATCH_GCC_DEBUG=1
+ fi
++if [ -z "$USERMODBUILDDIR" ];then
++	USERMODBUILDDIR=$USERMODDIR;
++fi
+ if [ -z "$USERMODDIR" ];then
+ 	echo "Building original kernel"
+ 	./scripts/setlocalversion --save-scmversion || die
+ else
+ 	echo "Building original module"
++	[[ -e $USERMODDIR/Module.symvers ]] && cp -f $USERMODDIR/Module.symvers $TEMPDIR/patch/
+ fi
+ unset KPATCH_GCC_TEMPDIR
+ # $TARGETS used as list, no quotes.
+ # shellcheck disable=SC2086
+-CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS 2>&1 | logger || die
++if [ -z "$USERMODDIR" ];then
++	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS 2>&1 | logger || die
++else
++	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make -C "$USERMODBUILDDIR" M="$USERMODBUILDDIR" "-j$CPUS" $USERMODFLAGS $TARGETS 2>&1 | logger || die
++fi
+ 
+ sleep 1
+ if [ -z "$USERMODDIR" ];then
+@@ -753,9 +769,15 @@ KPATCH_GCC_TEMPDIR="$TEMPDIR"
+ export KPATCH_GCC_TEMPDIR
+ # $TARGETS used as list, no quotes.
+ # shellcheck disable=SC2086
+-CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
+-	KBUILD_MODPOST_WARN=1 \
+-	make "-j$CPUS" $TARGETS 2>&1 | logger || die
++if [ -z "$USERMODDIR" ];then
++	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
++	       KBUILD_MODPOST_WARN=1 \
++	       make "-j$CPUS" $TARGETS 2>&1 | logger || die
++else
++	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
++	       KBUILD_MODPOST_WARN=1 \
++	       make -C "$USERMODBUILDDIR" M="$USERMODBUILDDIR" "-j$CPUS" $USERMODFLAGS $TARGETS 2>&1 | logger || die
++fi
+ 
+ # source.c:(.section+0xFF): undefined reference to `symbol'
+ grep "undefined reference" "$LOGFILE" | sed -r "s/^.*\`(.*)'$/\\1/" \
+-- 
+1.7.5.4
+

@@ -1,0 +1,36 @@
+From 17a97b48bcf0d486007b746c48321bab6dedb2d8 Mon Sep 17 00:00:00 2001
+From: Artem Savkov <asavkov@redhat.com>
+Date: Wed, 14 Nov 2018 15:09:34 +0100
+Subject: [PATCH] kmod/patch: fix patch linking with 4.20
+
+4.20 includes commit 69ea912fda74 "kbuild: remove unneeded link_multi_deps"
+which changes kbuild so that only '.o' files are given to ld as targets
+for linking, leaving out our linker script. Even before this commit we
+were still doing this wrong and were succeeding just because ld is smart
+enough to detect the script, it even throws a warning:
+
+ld: warning: kpatch.lds contains output sections; did you forget -T?
+
+The right thing to do is to add the script to ldflags either through
+kbuilds 'ldflags-y' or by adding it to LDFLAGS/KPATCH_LDFLAGS directly.
+
+Signed-off-by: Artem Savkov <asavkov@redhat.com>
+---
+ kmod/patch/Makefile | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kmod/patch/Makefile b/kmod/patch/Makefile
+index 96d1fca..7ba0820 100644
+--- a/kmod/patch/Makefile
++++ b/kmod/patch/Makefile
+@@ -11,6 +11,7 @@ KBUILD_CFLAGS_MODULE += -mcmodel=large
+ endif
+ 
+ obj-m += $(KPATCH_NAME).o
++ldflags-y += -T $(src)/kpatch.lds
+ 
+ $(KPATCH_NAME)-objs += patch-hook.o kpatch.lds output.o
+ 
+-- 
+1.7.12.4
+

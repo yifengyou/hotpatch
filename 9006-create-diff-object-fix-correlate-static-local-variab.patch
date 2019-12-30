@@ -1,0 +1,50 @@
+From 2f95a0fa6214a97f60a0d5ba4dc0cda152d5c7d4 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Fri, 2 Nov 2018 17:24:51 +0000
+Subject: [PATCH 1006/1015] create-diff-object: fix correlate static local
+ variables for __param section
+
+kpatch-build correlate fail when no sections reference
+static local variables in __param section, so the static
+local variables are incorrectly recognized as a new symbol
+and include a incomplete __param section into the patch.
+The kernel oops when meet the incomplete __param section.
+[  625.961330] Call Trace:
+[  625.963279]  [<ffffffff9b2a0c27>] ? kernfs_name_hash+0x17/0xd0
+[  625.965213]  [<ffffffff9b2a219f>] kernfs_add_one+0x8f/0x150
+[  625.967120]  [<ffffffff9b2a3a1e>] __kernfs_create_file+0x7e/0xa0
+[  625.969038]  [<ffffffff9b2a44db>] sysfs_add_file_mode_ns+0x9b/0x160
+[  625.970912]  [<ffffffff9b2a5231>] internal_create_group+0xd1/0x250
+[  625.972755]  [<ffffffff9b0b8629>] ? add_sysfs_param.isra.3+0x89/0x280
+[  625.975274]  [<ffffffff9b2a53c3>] sysfs_create_group+0x13/0x20
+[  625.977108]  [<ffffffff9b0b8f24>] module_param_sysfs_setup+0x94/0xd0
+[  625.978899]  [<ffffffff9b10f4e2>] load_module+0x2392/0x2bc0
+[  625.980693]  [<ffffffff9b376a70>] ? ddebug_proc_write+0xf0/0xf0
+[  625.982448]  [<ffffffff9b10b4b3>] ?
+copy_module_from_fd.isra.43+0x53/0x150
+[  625.984187]  [<ffffffff9b10fec6>] SyS_finit_module+0xa6/0xd0
+[  625.985926]  [<ffffffff9b71f7d5>] system_call_fastpath+0x1c/0x21
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/create-diff-object.c |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 6e23295..bd7dd37 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -925,6 +925,10 @@ static int kpatch_is_normal_static_local(struct symbol *sym)
+ 	if (is_special_static(sym))
+ 		return 0;
+ 
++	if (!strncmp(sym->name, "__param_", strlen("__param_")) &&
++			!strncmp(sym->sec->name, "__param", strlen("__param")))
++		return 0;
++
+ 	return 1;
+ }
+ 
+-- 
+1.7.5.4
+

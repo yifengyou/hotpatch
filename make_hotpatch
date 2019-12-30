@@ -1,0 +1,726 @@
+#!/bin/bash
+# Copyright (C) 2019. Huawei Technologies Co., Ltd. All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 and
+# only version 2 as published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+
+SHELL_DIR=$(dirname $0)
+SHELL_DIR=$(cd $SHELL_DIR; pwd)
+G_PRIVATE_MODULE=
+G_HOTPATCH=
+G_HOTPATCH_ID=
+G_HOTPATCH_TAR=
+G_DIFFEXT=
+G_JOBS="$(getconf _NPROCESSORS_ONLN)"
+G_PATCH_SRC=
+G_KERNEL_SRC=/opt/patch_workspace/kernel-source
+G_KERNEL_CONFIG=/opt/patch_workspace/.config
+G_HOTPATCH_DIR=/opt/patch_workspace/hotpatch
+G_VMLINUX=/opt/patch_workspace/vmlinux
+G_PREFIX=klp
+G_TMP_DIR=
+G_PATCHFILE=
+G_MODULE_SRC=
+G_MODULE_MAKEFILE=
+G_KPLICE_PWD_FIELD="KPLICE_PWD"
+G_PRIVATE_MODULE_SRC_FIELD="PRIVATE_MODULE_SRC"
+G_KPATCH_FLAGS=/opt/patch_workspace/.flags
+G_DEBUG_INFO=
+G_EXT_FLAGS=
+USERMODBUILDDIR=
+
+#########################################################
+#    Description: usage
+#    Input:  
+#    Return: 0-success
+#########################################################
+function fn_usage()
+{
+    cat << EOF
+Usage:
+    make_hotpatch [*OPTIONS*] -d patch_diffext -i patch_id -m module_src
+
+Options:
+    -d,--diffext 
+            make hotpatch using the modified source files with
+            names ending in *patch_diffext*. The patch will be determined by
+            comparing all of the files in the build directory tree
+            whose names end with the extra extension *patch_diffext* against the
+            corresponding files without the extra extension.
+    -j,--jobs
+            Specifies the number of jobs to run simultaneously while
+            performing builds.
+    -i,--id
+            Specifies the unique value that will be used as the identifier
+            of the hotpatch. 
+    -m,--modulesrc
+            Specifies the module src path for make user module hotpatch.
+    -f,--makefile
+            Specifies the module makefile for make user module hotpatch.
+    --extra_flags
+            Specifies extra flags file for make user module hotpatch.
+    --no_stack_check
+            make hotpatch without stack check when activating or deactivating this patch.
+    --debug_info
+            Save debug info when hotpatch building.Default is closed.
+    -p,--patch
+            Specifies the patch file
+    --kallsyms
+	        Specifies module kallsyms in running system(cat /proc/kallsyms|grep mod)
+    -h,--help
+            help info
+EOF
+
+    return 0
+}
+
+
+#########################################################
+#    Description: fn_do_clean, remove tmp file
+#    Input: 
+#        $1: init flag
+#    Return: 0-success
+#########################################################
+function fn_do_clean()
+{
+    local ret=0 
+    G_EXT_FLAGS=
+    unset NO_STACK_CHECK
+    unset KALLSYMS
+    rm -rf $G_TMP_DIR
+    
+}
+
+#########################################################
+#    Description:  fn_check_reg_char
+#    Input:  
+#        $@: input param
+#    Return: 0-success,1-failed
+#########################################################
+function fn_check_reg_char()
+{
+    local l_str=$1
+    local l_str_maxlen=$2
+    local l_str_ex=$3
+    local len_str=${#l_str}
+    
+    if [ -z "$l_str" ];then
+        echo "error: the string is empty, check string failed"
+        return 1
+    fi
+    ##字符串长度
+    if [ -n "$l_str_maxlen" ] && [ -z "`echo $l_str_maxlen | sed 's/[0-9]//g'`" ];then
+        if [ $len_str -gt $l_str_maxlen ]; then
+            echo "error: The length of $l_str exceed max length $l_str_maxlen." 
+            return 1
+        fi
+    fi
+    #不能包含其他字符
+    if [ -n "$l_str_ex" ] && [ -n "`echo $l_str | grep -E [$l_str_ex] 2>/dev/null`" ];then
+        echo "error: string $l_str included characters $l_str_ex."
+        return 1
+    fi
+    ##数字和字母开头
+    if [ -z "`echo $l_str | grep -E '^[a-z0-9A-Z]'`" ];then
+        echo "error: string $l_str must start with a character ('0-9' or 'A-Z' or 'a-z')."
+        return 1
+    fi 
+    ##只能数字和字母 -_
+    if [ -n "`echo $l_str | grep -E '[^a-z0-9A-Z_-]'`" ];then
+        if [ -n "$l_str_ex" ] ;then
+            ##这个日志写不好
+            echo "error: string $l_str can only contain characters included by ('0-9', 'a-z', 'A-Z')"
+        else
+            echo "error: string $l_str can only contain characters included by ('0-9', 'a-z', 'A-Z', '-', '_')."
+        fi
+        
+        return 1
+    fi    
+    
+}
+
+#########################################################
+#    Description: fn_check_id 
+#    Input:  
+#        $1: 
+#    Return: 0-success,1-failed
+#########################################################
+function fn_check_id()
+{
+    local l_id=$1
+    fn_check_reg_char "$l_id" "20" "-_"
+    if [ $? -ne 0 ];then
+        echo "error: check hotpatch id failed"
+        return 1
+    fi
+    
+    G_HOTPATCH_ID=$l_id
+    G_HOTPATCH=${G_PREFIX}_${G_HOTPATCH_ID}.ko
+    G_HOTPATCH_TAR=${G_PREFIX}_${G_HOTPATCH_ID}.tar.gz
+    if [ -f "$G_HOTPATCH_DIR/$G_HOTPATCH_TAR" ];then
+        echo "error: $G_HOTPATCH_DIR/$G_HOTPATCH_TAR is exist, check hotpatch id failed"
+        return 1    
+    fi
+    return 0
+}
+
+
+#########################################################
+#    Description: fn_check_jobs 
+#    Input:  
+#        $1: 
+#    Return: 0-success,1-failed
+#########################################################
+function fn_check_jobs()
+{
+    local l_jobs=$1
+    if [ -z "`echo "$l_jobs" | grep ^[1-9]`" ] || [ -n "`echo "$l_jobs" | sed 's/[0-9]//g'`" ];then
+        echo "error: the '-j' option requires a positive integral argument"
+        return 1
+    fi
+    G_JOBS=$l_jobs
+    return 0
+}
+
+#########################################################
+#    Description: fn_check_patch
+#    Input:  
+#        $1: 
+#    Return: 0-success,1-failed
+#########################################################
+function fn_check_patch(){
+    local l_patch=$1
+    if [ ! -f $1 ];then
+	echo "error:patch file $1 not exit"
+	return 1
+    fi
+    G_PATCHFILE=$l_patch
+}
+#########################################################
+#    Description: fn_check_diffext 
+#    Input:  
+#        $1: 
+#    Return: 0-success,1-failed
+#########################################################
+function fn_check_diffext()
+{
+    local l_diffext=$1
+
+    if [ -z "$l_diffext" ];then
+        echo "error: diffext is empty, check diffext failed"
+        return 1
+    fi
+    G_DIFFEXT=$l_diffext
+    return 0
+}
+
+
+#########################################################
+#    Description: fn_check_kernelsrc 
+#    Input:  
+#        $1: 
+#    Return: 0-success,1-failed
+#########################################################
+function fn_check_kernelsrc()
+{
+    local l_kernelsrc=$1
+
+    if [ ! -d "$l_kernelsrc" ];then
+        echo "error: kernel src $l_kernelsrc is not exist, check kernel src failed"
+        return 1
+    fi
+    G_KERNEL_SRC=$l_kernelsrc
+    return 0
+}
+
+#########################################################
+#    Description: fn_check_modulesrc 
+#    Input:  
+#        $1: 
+#    Return: 0-success,1-failed
+#########################################################
+function fn_check_modulesrc()
+{
+    local l_modulesrc=$1
+
+    if [ ! -d "$l_modulesrc" ];then
+        echo "error: module src $l_modulesrc is not exist, check module src failed"
+        return 1
+    fi
+    echo "$l_modulesrc" | grep -q ^/ 
+    if [ $? -ne 0 ];then
+        echo "error: module src $l_modulesrc must be absolute path, check module src failed"
+        return 1    
+    fi
+    G_MODULE_SRC="$l_modulesrc"
+    return 0
+}
+#########################################################
+#    Description: fn_check_makefile
+#    Input:
+#        $1:
+#    Return: 0-success,1-failed
+#########################################################
+function fn_check_makefile()
+{
+    local l_module_makefile=$1
+
+    if [ ! -f "$l_module_makefile" ] && [ "$(basename $l_module_makefile)" = "Makefile" ];then
+        echo "error: module makefile $l_module_makefile is not exist or makefile name is not Makefile, check module makefile failed"
+        return 1
+    fi
+    echo "$l_module_makefile" | grep -q ^/
+    if [ $? -ne 0 ];then
+        echo "error: module makefile $l_module_makefile must be absolute path, check module src failed"
+        return 1
+    fi
+    G_MODULE_MAKEFILE=$l_module_makefile
+    return 0
+}
+#########################################################
+#    Description: fn_check_extra_flags 
+#    Input:  
+#        $1: 
+#    Return: 0-success,1-failed
+#########################################################
+function fn_check_extra_flags()
+{
+    local l_extra_flags=$1
+
+    if [ ! -f "$l_extra_flags" ];then
+        echo "error: extra flags file $l_extra_flags is not exist, check extra flags failed"
+        return 1
+    fi
+    G_EXT_FLAGS="`readlink -f ${l_extra_flags}`"
+    cp -a $l_extra_flags $G_KPATCH_FLAGS
+    if [ $? -ne 0 ];then
+        echo "error: copy $l_extra_flags to $G_KPATCH_FLAGS failed"
+        return 1
+    fi    
+    return 0
+}
+
+#########################################################
+#    Description:  verify input param
+#    Input:  
+#        $@: input param
+#    Return: 0-success,1-failed
+#########################################################
+function fn_verify_input()
+{
+    local input_param=$@
+
+    if [ $# -lt 1 ]; then
+        echo "error: missing param,please check it"
+        fn_do_clean
+        fn_usage
+        exit 1
+    fi
+
+    if [ -z "`echo "$input_param" | grep -w "\-i"`" \
+	-a -z "`echo $input_param | grep -w "\-\-id"`" \
+	-a $# -gt 1 ];then
+        echo "error: missing param -i or --id"
+        fn_do_clean
+        fn_usage
+        exit 1
+    fi
+    if [ -z "`echo "$input_param" | grep -w "\-d"`" \
+	-a -z "`echo $input_param | grep -w "\-\-diffext"`" \
+	-a -z "`echo $input_param | grep -w "\-p"`" \
+	-a -z "`echo $input_param | grep -w "\-\-patch"`" \
+	-a $# -gt 1 ];then
+        echo "error: missing param -d,--diffext or -p,--patch"
+        fn_do_clean
+        fn_usage
+        exit 1
+    fi
+
+    while [ $# -ge 1 ]; do
+        case "$1" in
+        -h|--help)
+            fn_usage
+            fn_do_clean
+            exit 0
+        ;;
+        -j|--jobs)
+            fn_check_jobs $2
+            if [ $? -eq 0 ]; then
+                shift 2
+            else
+                fn_do_clean
+                fn_usage
+                exit 1
+            fi
+        ;;        
+        -i|--id)
+            fn_check_id $2
+            if [ $? -eq 0 ]; then
+                shift 2
+            else
+                fn_do_clean
+                fn_usage
+                exit 1
+            fi
+        ;;
+        -d|--diffext)
+            fn_check_diffext $2
+            if [ $? -eq 0 ]; then
+                shift 2
+            else
+                fn_do_clean
+                fn_usage
+                exit 1
+            fi
+        ;;
+	-p|--patch)
+	    fn_check_patch $2
+            if [ $? -eq 0 ]; then
+                shift 2
+            else
+                fn_do_clean
+                fn_usage
+                exit 1
+            fi
+	;;
+        -k|--kernelsrc)
+            fn_check_kernelsrc $2
+            if [ $? -eq 0 ]; then
+                shift 2
+            else
+                fn_do_clean
+                fn_usage
+                exit 1
+            fi
+        ;;
+        -m|--modulesrc)
+            fn_check_modulesrc $2
+            if [ $? -eq 0 ]; then
+                shift 2
+            else
+                fn_do_clean
+                fn_usage
+                exit 1
+            fi
+        ;;
+        -f|--makefile)
+            fn_check_makefile $2
+            if [ $? -eq 0 ]; then
+                shift 2
+            else
+                fn_do_clean
+                fn_usage
+                exit 1
+            fi
+        ;;
+        --extra_flags)
+            fn_check_extra_flags $2
+            if [ $? -eq 0 ]; then
+                shift 2
+            else
+                fn_do_clean
+                fn_usage
+                exit 1
+            fi
+        ;;
+        --no_stack_check)
+                export NO_STACK_CHECK="yes"
+                shift 1
+        ;;
+        --debug_info)
+                G_DEBUG_INFO="-d"                                                     
+                shift 1 
+        ;;
+        --kallsyms)
+	    export KALLSYMS=$(readlink -f $2)
+            if [ $? -eq 0 ]; then
+                shift 2
+            else
+                fn_do_clean
+                fn_usage
+                exit 1
+            fi
+        ;;
+
+        *)
+            echo "error: params is invalid,please check it."
+            fn_do_clean
+            fn_usage
+            exit 1
+        ;;
+        esac
+    done
+
+
+    return 0
+}
+
+
+#########################################################
+#    Description:  fn_init_module_build
+#    Input:  
+#    Return: 0-success,1-failed
+#########################################################
+function fn_init_module_build()
+{
+    local l_modulesrc=$1
+    local l_module_makefile=$2
+    local module=
+
+    module=`basename $l_modulesrc`
+    
+    if [ ! -e $G_PRIVATE_MODULE ];then
+        mkdir -p $G_PRIVATE_MODULE
+    fi
+    
+    rm -rf $G_PRIVATE_MODULE/*
+    if [ $? -ne 0 ];then
+        echo "error: remove $G_PRIVATE_MODULE/$module or Makefile failed"
+        return 1
+    fi
+
+    #make a new softlink 或改成链接
+    ln -sf $l_modulesrc $G_PRIVATE_MODULE
+    if [ $? -ne 0 ];then
+        echo "error: copy $l_modulesrc to $G_PRIVATE_MODULE failed"
+        return 1
+    fi
+    if [ -z "$l_module_makefile" ];then
+        l_module_makefile=$l_modulesrc/Makefile
+    fi
+
+    echo "${G_KPLICE_PWD_FIELD}=${l_modulesrc}/" >> $G_KPATCH_FLAGS
+    echo "${G_PRIVATE_MODULE_SRC_FIELD}=$(dirname $l_module_makefile)/" >> $G_KPATCH_FLAGS
+
+    fMake=`find ${G_PRIVATE_MODULE}/${module}/ -name Makefile`
+    #if no Makefile found in module dir
+    if [ -z "$fMake" ] && [ ! -f "$l_module_makefile" ];then
+        echo "[ERROR] no Makefilie found in module dir $l_modulesrc"
+        return 1
+    fi
+    #filter CC in module Makefile     
+    if [ -n "$fMake" ];then
+        cat $fMake|grep -v '^#'|grep '^[ ,]CC[ ,:,=,?]'
+        if [ $? -eq 0 ];then
+            echo "[WARN] ${module}'s Makefile defined CC,please make sure \"CC:=\$(G_KSPLICECC) \$(CC)\" "
+        fi
+    fi
+    if [ -f "$l_module_makefile" ];then
+        cat $l_module_makefile|grep -v '^#'|grep '^[ ,]CC[ ,:,=,?]'
+        if [ $? -eq 0 ];then
+            echo "[WARN] ${module}'s Makefile defined CC,please make sure \"CC:=\$(G_KSPLICECC) \$(CC)\" "
+        fi
+    fi
+}
+
+
+#########################################################
+#    Description:  fn_makepatch
+#    Input:  
+#    Return: 0-success,1-failed
+#########################################################
+function fn_makepatch()
+{
+    local l_extra_module=
+    local l_jobs=
+    local l_ret=0
+    local existflag=0
+
+    G_PATCH_SRC=`readlink -f $G_KERNEL_SRC`
+    if [ -d "$G_MODULE_SRC" ];then
+	echo "make out of tree module hotpath"
+	G_PATCH_SRC=$G_MODULE_SRC
+        #fn_init_module_build $G_MODULE_SRC $G_MODULE_MAKEFILE
+        #if [ $? -ne 0 ];then
+        #    echo "error: init module build failed"
+        #    return 1
+        #fi
+        l_extra_module="-m $G_MODULE_SRC"
+    fi 
+
+    if [ -n "$G_JOBS" ];then
+        l_jobs="--jobs=$G_JOBS"
+    fi
+    G_TMP_DIR=/tmp/${G_PREFIX}_${G_HOTPATCH_ID}
+    mkdir -p $G_TMP_DIR
+
+    if [ -z "$G_PATCHFILE" ];then
+	#generate src patch file from G_DIFFEXT
+	G_PATCHFILE=$G_TMP_DIR/$G_HOTPATCH_ID.patch
+    	rm -rf $G_PATCHFILE
+	cd $G_PATCH_SRC &>/dev/null
+	l_change_file=($(find -L -name "*$G_DIFFEXT" | xargs readlink -f 2>/dev/null| sort | uniq))
+	echo "detect change files:${l_change_file[@]}"
+	for file in ${l_change_file[@]};
+    	do
+                file="./${file#$(readlink -f $G_PATCH_SRC)}"
+                orig_file=${file%$G_DIFFEXT}
+                if [ "${orig_file##*.}" == "h" ]; then
+                        existflag=1 && break
+                fi
+                diff -u $orig_file $file >> $G_PATCHFILE
+	done
+	cd - &>/dev/null
+	if [ ${existflag} -eq 1 ]; then
+		echo "error: do not modify the header file"
+		return 1
+	fi
+	if [ -f $G_PATCHFILE ];then
+		echo "make patch $G_PATCHFILE"
+	else
+		echo "no change detected"
+		return 1	
+	fi
+    else
+	cp $G_PATCHFILE $G_TMP_DIR/${G_HOTPATCH_ID}.patch
+	G_PATCHFILE=$G_TMP_DIR/${G_HOTPATCH_ID}.patch
+    fi
+
+
+    cd $G_TMP_DIR &>/dev/null
+    if [ -n "$G_MODULE_MAKEFILE" ];then
+            USERMODBUILDDIR=$(dirname $G_MODULE_MAKEFILE)
+    fi
+    export USERMODBUILDDIR
+    export USERMODFLAGS=`cat $G_KPATCH_FLAGS`
+    export NO_PROFILING_CALLS=yes
+    kpatch-build -s $G_KERNEL_SRC $l_extra_module  -c $G_KERNEL_CONFIG -v $G_VMLINUX --skip-gcc-check -n "${G_PREFIX}_${G_HOTPATCH_ID}" -b /lib/modules/`uname -r`/build $G_DEBUG_INFO $G_PATCHFILE 
+    l_ret=$?
+    cd - &>/dev/null
+    if [ $l_ret -eq 0 ] && [ -f "$G_TMP_DIR/$G_HOTPATCH" ];then
+        if grep -q "CONFIG_MODULE_SIG=y" .config ;then
+            echo "kernel compile with CONFIG_MODULE_SIG=y,please sign the patch module"
+        fi
+	cd /tmp &>/dev/null
+        l_env_file=$G_TMP_DIR/toolenv
+        if [ -n "`which rpm 2>/dev/null`" ]; then
+                echo "------------------------------------------------------------------------ " > "${l_env_file}"
+                echo >> "${l_env_file}"
+                echo "The kpatch tool version info and release date:" >> "${l_env_file}"
+                rpm -qi kpatch >> "${l_env_file}"
+                echo >> "${l_env_file}"
+                echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+        else
+                echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+        fi
+
+        echo >> "${l_env_file}"
+        echo "The hotpatch build time:" >> "${l_env_file}"
+        echo "`date '+%Y-%m-%d %H:%M:%S'`" >> "${l_env_file}"
+        echo >> "${l_env_file}"
+        echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+
+        if [ -f "/etc/EulerLinux.conf" ]; then
+                echo >> "${l_env_file}"
+                echo "The euler compile env version info:" >> "${l_env_file}"
+                cat /etc/EulerLinux.conf >> "${l_env_file}"
+                echo >> "${l_env_file}"
+                echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+        fi
+
+        if [ -n "${G_MODULE_SRC}" ]; then
+                echo >> "${l_env_file}"
+                echo "The module hotpatch compile path info:" >> "${l_env_file}"
+                echo "MODULE_SRC=${G_MODULE_SRC}" >> "${l_env_file}"
+                echo "MODULE_MAKEFILE=${G_MODULE_MAKEFILE}" >> "${l_env_file}"
+                echo >> "${l_env_file}"
+                echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+        fi
+
+        if [ -f "${G_EXT_FLAGS}" ]; then
+                echo >> "${l_env_file}"
+                echo "The module hotpatch compile flags info:" >> "${l_env_file}"
+                cat "${G_EXT_FLAGS}" >> "${l_env_file}"
+                echo >> "${l_env_file}"
+                echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+        fi
+
+        if [ -n "${G_DEBUG_INFO}" ]; then
+                echo >> "${l_env_file}"
+                echo "The debug option info:" >> "${l_env_file}"
+                echo "${G_DEBUG_INFO}" >> "${l_env_file}"
+                echo >> "${l_env_file}"
+                echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+        fi
+
+	tar -czf $G_HOTPATCH_TAR ${G_PREFIX}_${G_HOTPATCH_ID}
+        mv ${G_HOTPATCH_TAR} ${G_HOTPATCH_DIR}
+	cd - &>/dev/null
+        if [ $? -ne 0 ];then
+            echo "error: move ${G_HOTPATCH} to ${G_KSPLICE_HOTPATCH} failed"
+            return 1            
+        fi
+    else
+        echo "error: invoke kpatch-build shell script to build patch failed"
+        return 1
+    fi
+
+}
+#########################################################
+#    Description:  main
+#    Input:  
+#    Return: 0-success,1-failed
+#########################################################
+function fn_main()
+{
+    local ret=
+    local pid=
+    fn_verify_input $@
+    if [ $? -ne 0 ]; then
+        fn_do_clean
+        return 1
+    fi
+
+    fn_makepatch
+    if [ $? -ne 0 ]; then
+        fn_do_clean
+        return 1
+    fi    
+    
+    fn_do_clean 
+
+    return 0
+    
+}
+
+function fn_prepare()
+{
+	kerver=`uname -r`
+	kerver=${kerver%.x86_64}
+	kerver=${kerver%.aarch64}
+	echo kernel version:$kerver
+	if [ ! -L kernel-source ];then
+		if [ -d /arm/arm_kernel ];then
+			ln -s /arm/arm_kernel/linux-$kerver kernel-source
+		else
+			ln -s /usr/src/kernels/linux-$kerver kernel-source
+			cp /lib/modules/`uname -r`/build/Makefile /usr/src/kernels/linux-$kerver 
+		fi
+	fi
+	if [ ! -L .config ];then
+		if [ -d /arm/arm_kernel ];then
+			ln -s /arm/arm_kernel/linux-$kerver/.config .config
+		else
+			ln -s /usr/src/kernels/linux-$kerver/.config  .config
+			cp /lib/modules/`uname -r`/build/.config /usr/src/kernels/linux-$kerver 
+		fi
+	fi
+	rm -rf $G_KPATCH_FLAGS
+	touch $G_KPATCH_FLAGS
+}
+
+G_NUM=`pidof -x make_hotpatch | wc -w`
+if [ $G_NUM -gt 2 ];then
+        echo "[$0]someone is making, please try again later."
+        exit 1
+fi
+
+fn_prepare
+fn_main $@
+exit $?

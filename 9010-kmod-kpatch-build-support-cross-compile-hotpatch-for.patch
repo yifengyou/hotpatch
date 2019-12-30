@@ -1,0 +1,480 @@
+From be8e5ce9541fc230131be230bd0646c473427895 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Fri, 2 Nov 2018 17:25:20 +0000
+Subject: [PATCH 1010/1015] kmod/kpatch-build: support cross compile hotpatch
+ for aarch64
+
+use R_AARCH64_ABS64 for aarch64, function_ptr_rela and
+kpatch_line_macro_change_only are left to implement later.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kmod/patch/livepatch-patch-hook.c   |   16 +++---
+ kpatch-build/create-diff-object.c   |   98 ++++++++++++++++++++++++++++++----
+ kpatch-build/create-kpatch-module.c |   24 ++++++++-
+ kpatch-build/kpatch-build           |   42 ++++++++++++---
+ kpatch-build/kpatch-gcc             |    4 +-
+ 5 files changed, 152 insertions(+), 32 deletions(-)
+
+diff --git a/kmod/patch/livepatch-patch-hook.c b/kmod/patch/livepatch-patch-hook.c
+index 8f7d044..ee3b2b9 100644
+--- a/kmod/patch/livepatch-patch-hook.c
++++ b/kmod/patch/livepatch-patch-hook.c
+@@ -66,13 +66,17 @@
+ 
+ #ifdef EULER_RELEASE_CODE
+ # if EULER_RELEASE_CODE <= EULER_RELEASE_VERSION(2, 3)
+-#  undef HAVE_SYMPOS
+-#  undef HAVE_IMMEDIATE
+-#  undef HAVE_ELF_RELOCS
+-#  define HAVE_LOADHOOKS
++#  define __HULK__
+ # endif
+ #endif
+ 
++#ifdef __HULK__
++# undef HAVE_SYMPOS
++# undef HAVE_IMMEDIATE
++# undef HAVE_ELF_RELOCS
++# define HAVE_LOADHOOKS
++#endif
++
+ /*
+  * There are quite a few similar structures at play in this file:
+  * - livepatch.h structs prefixed with klp_*
+@@ -500,12 +504,10 @@ static int __init patch_init(void)
+ #else
+ 			lfunc->old_addr = func->kfunc->old_addr;
+ #endif
+-#ifdef EULER_RELEASE_CODE
+-# if EULER_RELEASE_CODE <= EULER_RELEASE_VERSION(2, 3)
++#ifdef __HULK__
+ 			lfunc->old_size = func->kfunc->old_size;
+ 			lfunc->new_size = func->kfunc->new_size;
+ 			lfunc->force = patch_is_func_forced(func->kfunc->new_addr);
+-# endif
+ #endif
+ 			j++;
+ 		}
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index ed96758..b8d3bb4 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -70,6 +70,31 @@ char *childobj;
+ 
+ enum loglevel loglevel = NORMAL;
+ 
++#ifndef EM_X86_64
++#define EM_X86_64	62
++#endif
++
++#ifndef EM_AARCH64
++#define EM_AARCH64      183
++#endif
++
++#ifndef R_AARCH64_ABS64
++#define R_AARCH64_NONE	0
++#define R_AARCH64_ABS64	257
++#define R_AARCH64_CALL26	283
++#endif
++
++static unsigned int arch;
++static unsigned int absolute_rela_type;
++
++static unsigned int arch_of_elf(Elf *elf)
++{
++	GElf_Ehdr eh;
++	if (!gelf_getehdr(elf, &eh))
++		ERROR("gelf_getehdr");
++	return eh.e_machine;
++}
++
+ /*******************
+  * Data structures
+  * ****************/
+@@ -635,6 +660,8 @@ static void kpatch_compare_correlated_symbol(struct symbol *sym)
+ 	if (sym1->sec && sym2->sec && sym1->sec->twin != sym2->sec) {
+ 		if (sym2->sec->twin && sym2->sec->twin->ignore)
+ 			sym->status = CHANGED;
++		else if (sym1->name[0] == '$') /* reserved symbols in aarch64 */
++			log_debug("maping symbols: %s", sym1->name); /* do nothing just ignogre */
+ 		else
+ 			DIFF_FATAL("symbol changed sections: %s", sym1->name);
+ 	}
+@@ -2294,7 +2321,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
+ 		/* entries[index].sec */
+ 		ALLOC_LINK(rela, &karch_sec->rela->relas);
+ 		rela->sym = sec->secsym;
+-		rela->type = ABSOLUTE_RELA_TYPE;
++		rela->type = absolute_rela_type;
+ 		rela->addend = 0;
+ 		rela->offset = index * sizeof(*entries) + \
+ 			       offsetof(struct kpatch_arch, sec);
+@@ -2302,7 +2329,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
+ 		/* entries[index].objname */
+ 		ALLOC_LINK(rela, &karch_sec->rela->relas);
+ 		rela->sym = strsym;
+-		rela->type = ABSOLUTE_RELA_TYPE;
++		rela->type = absolute_rela_type;
+ 		rela->addend = offset_of_string(&kelf->strings, objname);
+ 		rela->offset = index * sizeof(*entries) + \
+ 			       offsetof(struct kpatch_arch, objname);
+@@ -2500,7 +2527,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
+ 			 */
+ 			ALLOC_LINK(rela, &relasec->relas);
+ 			rela->sym = sym;
+-			rela->type = ABSOLUTE_RELA_TYPE;
++			rela->type = absolute_rela_type;
+ 			rela->addend = 0;
+ 			rela->offset = index * sizeof(*funcs);
+ 
+@@ -2510,7 +2537,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
+ 			 */
+ 			ALLOC_LINK(rela, &relasec->relas);
+ 			rela->sym = strsym;
+-			rela->type = ABSOLUTE_RELA_TYPE;
++			rela->type = absolute_rela_type;
+ 			rela->addend = offset_of_string(&kelf->strings, sym->name);
+ 			rela->offset = index * sizeof(*funcs) +
+ 			               offsetof(struct kpatch_patch_func, name);
+@@ -2521,7 +2548,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
+ 			 */
+ 			ALLOC_LINK(rela, &relasec->relas);
+ 			rela->sym = strsym;
+-			rela->type = ABSOLUTE_RELA_TYPE;
++			rela->type = absolute_rela_type;
+ 			rela->addend = objname_offset;
+ 			rela->offset = index * sizeof(*funcs) +
+ 			               offsetof(struct kpatch_patch_func,objname);
+@@ -2834,7 +2861,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+ 			/* add rela to fill in ksyms[index].name field */
+ 			ALLOC_LINK(rela2, &ksym_sec->rela->relas);
+ 			rela2->sym = strsym;
+-			rela2->type = ABSOLUTE_RELA_TYPE;
++			rela2->type = absolute_rela_type;
+ 			rela2->addend = offset_of_string(&kelf->strings, rela->sym->name);
+ 			rela2->offset = index * sizeof(*ksyms) + \
+ 					offsetof(struct kpatch_symbol, name);
+@@ -2842,7 +2869,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+ 			/* add rela to fill in ksyms[index].objname field */
+ 			ALLOC_LINK(rela2, &ksym_sec->rela->relas);
+ 			rela2->sym = strsym;
+-			rela2->type = ABSOLUTE_RELA_TYPE;
++			rela2->type = absolute_rela_type;
+ 			rela2->addend = offset_of_string(&kelf->strings, sym_objname);
+ 			rela2->offset = index * sizeof(*ksyms) + \
+ 					offsetof(struct kpatch_symbol, objname);
+@@ -2863,7 +2890,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+ 				ERROR("can't create dynrela for section %s (symbol %s): no bundled or section symbol",
+ 				      sec->name, rela->sym->name);
+ 
+-			rela2->type = ABSOLUTE_RELA_TYPE;
++			rela2->type = absolute_rela_type;
+ 			rela2->addend = rela->offset;
+ 			rela2->offset = index * sizeof(*krelas) + \
+ 					offsetof(struct kpatch_relocation, dest);
+@@ -2871,7 +2898,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+ 			/* add rela to fill in krelas[index].objname field */
+ 			ALLOC_LINK(rela2, &krela_sec->rela->relas);
+ 			rela2->sym = strsym;
+-			rela2->type = ABSOLUTE_RELA_TYPE;
++			rela2->type = absolute_rela_type;
+ 			rela2->addend = offset_of_string(&kelf->strings, objname);
+ 			rela2->offset = index * sizeof(*krelas) + \
+ 				offsetof(struct kpatch_relocation, objname);
+@@ -2879,7 +2906,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+ 			/* add rela to fill in krelas[index].ksym field */
+ 			ALLOC_LINK(rela2, &krela_sec->rela->relas);
+ 			rela2->sym = ksym_sec_sym;
+-			rela2->type = ABSOLUTE_RELA_TYPE;
++			rela2->type = absolute_rela_type;
+ 			rela2->addend = index * sizeof(*ksyms);
+ 			rela2->offset = index * sizeof(*krelas) + \
+ 				offsetof(struct kpatch_relocation, ksym);
+@@ -2946,7 +2973,7 @@ static void kpatch_create_callbacks_objname_rela(struct kpatch_elf *kelf, char *
+ 			if (!strcmp(callbackp->name, sec->name)) {
+ 				ALLOC_LINK(rela, &sec->relas);
+ 				rela->sym = strsym;
+-				rela->type = ABSOLUTE_RELA_TYPE;
++				rela->type = absolute_rela_type;
+ 				rela->addend = objname_offset;
+ 				rela->offset = callbackp->offset;
+ 				break;
+@@ -3000,6 +3027,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
+ 		/* add rela in .rela__mcount_loc to fill in function pointer */
+ 		ALLOC_LINK(rela, &relasec->relas);
+ 		rela->sym = sym;
++		if (arch == EM_X86_64) {
+ 		rela->type = R_X86_64_64;
+ 		rela->addend = 0;
+ 		rela->offset = index * sizeof(*funcs);
+@@ -3024,6 +3052,37 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
+ 		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
+ 					list);
+ 		rela->type = R_X86_64_PC32;
++		} else if (arch == EM_AARCH64) {
++			unsigned int *insnp;
++			rela->type = R_AARCH64_ABS64;
++			/* bl <__fentry__> is the second insn */
++			rela->addend = 4;
++			rela->offset = index * sizeof(*funcs);
++
++			newdata = malloc(sym->sec->data->d_size);
++			memcpy(newdata, sym->sec->data->d_buf, sym->sec->data->d_size);
++			sym->sec->data->d_buf = newdata;
++			insnp = newdata;
++
++			/*
++			 * mov x9, x30
++			 * nop //function in .text.<func>, so it be replaced with nop by recordmcount
++			 * mov x30, x9 
++			 */
++			if (insnp[0] != 0xaa1e03e9 || insnp[1] != 0xd503201f || insnp[2] != 0xaa0903fe)
++				ERROR("%s: unexpected instruction at the start of the function",
++						sym->name);
++
++			/* change the nop to bl __fentry__ */
++			insnp[1] = 0x94000000;
++			rela = list_first_entry(&sym->sec->rela->relas, struct rela,
++					list);
++			rela->type = R_AARCH64_CALL26;
++			rela->offset = 4;
++
++		} else {
++			ERROR("unsupport arch %d\n", arch);
++		}
+ 
+ 		index++;
+ 	}
+@@ -3168,6 +3227,7 @@ int main(int argc, char *argv[])
+ 	char *hint = NULL, *orig_obj, *patched_obj, *parent_name;
+ 	char *parent_symtab, *mod_symvers, *patch_name, *output_obj;
+ 	struct sym_compare_type *base_locals;
++	char *gcc_add_option, *mlongcall;
+ 
+ 	arguments.debug = 0;
+ 	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
+@@ -3188,6 +3248,13 @@ int main(int argc, char *argv[])
+ 
+ 	kelf_base = kpatch_elf_open(orig_obj);
+ 	kelf_patched = kpatch_elf_open(patched_obj);
++	arch = arch_of_elf(kelf_base->elf);
++	if (arch == EM_X86_64)
++		absolute_rela_type = R_X86_64_64;
++	else if (arch == EM_AARCH64)
++		absolute_rela_type = R_AARCH64_ABS64;
++	else
++		ERROR("only arch x86_64 and arm64 be supported\n");
+ 
+ 	kpatch_bundle_symbols(kelf_base);
+ 	kpatch_bundle_symbols(kelf_patched);
+@@ -3276,7 +3343,14 @@ int main(int argc, char *argv[])
+ 	kpatch_create_callbacks_objname_rela(kelf_out, parent_name);
+ 	kpatch_build_strings_section_data(kelf_out);
+ 
+-	kpatch_create_mcount_sections(kelf_out);
++	gcc_add_option = getenv("GCC_ADD_OPTION");
++	printf("gcc add option :%s\n", gcc_add_option);
++	mlongcall = strstr(gcc_add_option, "-mlong-calls");
++	if (arch == EM_AARCH64 && mlongcall) {
++		printf("-mlong-calls found, no need to create mcount section\n");
++	} else {
++		kpatch_create_mcount_sections(kelf_out);
++	}
+ 
+ 	/*
+ 	 *  At this point, the set of output sections and symbols is
+diff --git a/kpatch-build/create-kpatch-module.c b/kpatch-build/create-kpatch-module.c
+index 67b16b0..9f1c3b9 100644
+--- a/kpatch-build/create-kpatch-module.c
++++ b/kpatch-build/create-kpatch-module.c
+@@ -31,6 +31,17 @@
+ char *childobj;
+ enum loglevel loglevel = NORMAL;
+ 
++static unsigned int arch;
++static unsigned int absolute_rela_type;
++
++static unsigned int arch_of_elf(Elf *elf)
++{
++	GElf_Ehdr eh;
++	if (!gelf_getehdr(elf, &eh))
++		ERROR("gelf_getehdr");
++	return eh.e_machine;
++}
++
+ /*
+  * Create .kpatch.dynrelas from .kpatch.relocations and .kpatch.symbols sections
+  *
+@@ -102,14 +113,14 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
+ 		/* dest */
+ 		ALLOC_LINK(rela, &dynsec->rela->relas);
+ 		rela->sym = sym;
+-		rela->type = R_X86_64_64;
++		rela->type = absolute_rela_type;
+ 		rela->addend = dest_offset;
+ 		rela->offset = index * sizeof(*dynrelas);
+ 
+ 		/* name */
+ 		ALLOC_LINK(rela, &dynsec->rela->relas);
+ 		rela->sym = strsec->secsym;
+-		rela->type = R_X86_64_64;
++		rela->type = absolute_rela_type;
+ 		rela->addend = name_offset;
+ 		rela->offset = index * sizeof(*dynrelas) + \
+ 			       offsetof(struct kpatch_patch_dynrela, name);
+@@ -117,7 +128,7 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
+ 		/* objname */
+ 		ALLOC_LINK(rela, &dynsec->rela->relas);
+ 		rela->sym = strsec->secsym;
+-		rela->type = R_X86_64_64;
++		rela->type = absolute_rela_type;
+ 		rela->addend = objname_offset;
+ 		rela->offset = index * sizeof(*dynrelas) + \
+ 			       offsetof(struct kpatch_patch_dynrela, objname);
+@@ -200,6 +211,13 @@ int main(int argc, char *argv[])
+ 	childobj = basename(arguments.args[0]);
+ 
+ 	kelf = kpatch_elf_open(arguments.args[0]);
++	arch = arch_of_elf(kelf->elf);
++	if (arch == EM_X86_64)
++		absolute_rela_type = R_X86_64_64;
++	else if (arch == EM_AARCH64)
++		absolute_rela_type = R_AARCH64_ABS64;
++	else
++		ERROR("only arch x86_64 and arm64 be supported\n");
+ 
+ 	/*
+ 	 * Sanity checks:
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index 93a0589..017604c 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -384,6 +384,27 @@ find_kobj() {
+ 	done
+ }
+ 
++arch_export() {
++	E_MACHINE=$(od -An -j18 -N2 -d $VMLINUX)
++	if [[ $E_MACHINE -eq 62 ]]; then
++		export ARCH=x86_64
++		export ARCH_COMPILE=
++		export ENDIAN=little
++		export GCC_ADD_OPTION=
++	elif [[ $E_MACHINE -eq 183 ]]; then
++		export ARCH=arm64
++		export ARCH_COMPILE=aarch64-linux-gnu-
++		export ENDIAN=little
++		if grep "\-mlong-calls" $SRCDIR/Makefile > /dev/null; then
++			export GCC_ADD_OPTION="-fno-section-anchors -mlong-calls"
++		else
++			export GCC_ADD_OPTION="-fno-section-anchors"
++		fi
++	else
++		die "only support arm64 or x86_64 architecture"
++	fi
++}
++
+ # Only allow alphanumerics and '_' and '-' in the module name.  Everything else
+ # is replaced with '-'.  Also truncate to 48 chars so the full name fits in the
+ # kernel's 56-byte module name array.
+@@ -725,12 +746,12 @@ apply_patches
+ remove_patches
+ 
+ cp -LR "$DATADIR/patch" "$TEMPDIR" || die
+-
++arch_export
+ if [[ "$ARCH" = "ppc64le" ]]; then
+ 	ARCH_KCFLAGS="-mcmodel=large -fplugin=$PLUGINDIR/ppc64le-plugin.so"
+ fi
+ 
+-export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections $ARCH_KCFLAGS"
++export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections $ARCH_KCFLAGS ${GCC_ADD_OPTION}"
+ 
+ echo "Reading special section data"
+ find_special_section_data
+@@ -752,9 +773,9 @@ unset KPATCH_GCC_TEMPDIR
+ # $TARGETS used as list, no quotes.
+ # shellcheck disable=SC2086
+ if [ -z "$USERMODDIR" ];then
+-	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS 2>&1 | logger || die
++	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc $ARCH_COMPILE" make "-j$CPUS" $TARGETS 2>&1 | logger || die
+ else
+-	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make -C "$USERMODBUILDDIR" M="$USERMODBUILDDIR" "-j$CPUS" $USERMODFLAGS $TARGETS 2>&1 | logger || die
++	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc $ARCH_COMPILE" make -C "$USERMODBUILDDIR" M="$USERMODBUILDDIR" "-j$CPUS" $USERMODFLAGS $TARGETS 2>&1 | logger || die
+ fi
+ 
+ sleep 1
+@@ -770,11 +791,11 @@ export KPATCH_GCC_TEMPDIR
+ # $TARGETS used as list, no quotes.
+ # shellcheck disable=SC2086
+ if [ -z "$USERMODDIR" ];then
+-	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
++	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc $ARCH_COMPILE" \
+ 	       KBUILD_MODPOST_WARN=1 \
+ 	       make "-j$CPUS" $TARGETS 2>&1 | logger || die
+ else
+-	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
++	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc $ARCH_COMPILE" \
+ 	       KBUILD_MODPOST_WARN=1 \
+ 	       make -C "$USERMODBUILDDIR" M="$USERMODBUILDDIR" "-j$CPUS" $USERMODFLAGS $TARGETS 2>&1 | logger || die
+ fi
+@@ -907,6 +928,10 @@ if "$KPATCH_MODULE"; then
+ 	export KCPPFLAGS="-D__KPATCH_MODULE__"
+ fi
+ 
++if grep "hulk" $SRCDIR/Makefile > /dev/null; then
++	export KCPPFLAGS="-D__HULK__ $KCPPFLAGS"
++fi
++
+ echo "Building patch module: $MODNAME.ko"
+ 
+ if [[ -z "$USERSRCDIR" ]] && [[ "$DISTRO" = ubuntu ]]; then
+@@ -919,12 +944,12 @@ fi
+ cd "$TEMPDIR/output" || die
+ # $KPATCH_LDFLAGS and result of find used as list, no quotes.
+ # shellcheck disable=SC2086,SC2046
+-ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logger || die
++${ARCH_COMPILE}ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logger || die
+ 
+ if "$KPATCH_MODULE"; then
+ 	# Add .kpatch.checksum for kpatch script
+ 	md5sum ../patch/tmp_output.o | awk '{printf "%s\0", $1}' > checksum.tmp || die
+-	objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly  ../patch/tmp_output.o || die
++	${ARCH_COMPILE}objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly  ../patch/tmp_output.o || die
+ 	rm -f checksum.tmp
+ 	"$TOOLSDIR"/create-kpatch-module "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o 2>&1 | logger 1
+ 	check_pipe_status create-kpatch-module
+@@ -942,6 +967,7 @@ fi
+ KPATCH_BUILD="$KPATCH_BUILDIR" KPATCH_NAME="$MODNAME" \
+ KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
+ KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
++CROSS_COMPILE="$ARCH_COMPILE" \
+ 	make 2>&1 | logger || die
+ 
+ if ! "$KPATCH_MODULE"; then
+diff --git a/kpatch-build/kpatch-gcc b/kpatch-build/kpatch-gcc
+index 21f7e2e..be18847 100755
+--- a/kpatch-build/kpatch-gcc
++++ b/kpatch-build/kpatch-gcc
+@@ -13,7 +13,7 @@ fi
+ 
+ declare -a args=("$@")
+ 
+-if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
++if [[ "$TOOLCHAINCMD" = ${ARCH_COMPILE}gcc ]] ; then
+ 	while [ "$#" -gt 0 ]; do
+ 		if [ "$1" = "-o" ]; then
+ 			obj="$2"
+@@ -64,7 +64,7 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
+ 		fi
+ 		shift
+ 	done
+-elif [[ "$TOOLCHAINCMD" = "ld" ]] ; then
++elif [[ "$TOOLCHAINCMD" = ${ARCH_COMPILE}ld ]] ; then
+ 	while [ "$#" -gt 0 ]; do
+ 		if [ "$1" = "-o" ]; then
+ 			obj="$2"
+-- 
+1.7.5.4
+

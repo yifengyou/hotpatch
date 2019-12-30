@@ -1,0 +1,33 @@
+From d6304fcd36edd4e9df48687517f30965d9a790e9 Mon Sep 17 00:00:00 2001
+From: Bin Yang <robin.yb@huawei.com>
+Date: Tue, 16 Jul 2019 14:39:27 +0800
+Subject: [PATCH] add object in kpatch
+
+---
+ kpatch-build/kpatch-build | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index 59af250..f685654 100644
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -1011,6 +1011,8 @@ echo -n "Patched objects:"
+ for i in $(echo "${objnames[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+ do
+ 	echo -n " $i"
++	echo -n " $(basename $i)"
++	echo -n "$(basename $i)" >> $TEMPDIR/patch/object
+ done
+ echo
+ 
+@@ -1113,6 +1115,7 @@ UNDEFINED=$(comm -23 <(sort -u "${TEMPDIR}"/undefined_references) \
+ [[ -z "$USERMODDIR" ]] && [[ ! -z "$UNDEFINED" ]] && die "Undefined symbols: $UNDEFINED"
+ 
+ cp -f "$TEMPDIR/patch/$MODNAME.ko" "$BASE" || die
++cp -f "$TEMPDIR/patch/object" "$BASE" || die
+ 
+ [[ "$DEBUG" -eq 0 ]] && rm -f "$LOGFILE"
+ 
+-- 
+2.17.1
+
