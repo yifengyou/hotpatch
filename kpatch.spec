@@ -2,7 +2,7 @@
 
 Name:           kpatch
 Version:        2.0
-Release:        3.1.22
+Release:        3.1.23
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -45,10 +45,7 @@ Patch9029:      0004-create-diff-object-allow-changing-subsections.patch
 Patch9030:      9030-kmod-core-fix-compilation-with-CONFIG_HAVE_ARCH_PREL.patch
 
 BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel kernel-devel
-Requires:       bc tar bash kmod
-
-Provides:       kpatch-runtime
-Obsoletes:      kpatch-runtime
+Requires:       bc
 
 %description
 kpatch is a Linux dynamic kernel patching infrastructure which allows you to patch
@@ -56,6 +53,13 @@ a running kernel without rebooting or restarting any processes. It enables sysad
 to apply critical security patches to the kernel immediately, without having to wait
 for long-running tasks to complete, for users to log off, or for scheduled reboot
 windows. It gives more control over uptime without sacrificing security or stability.
+
+%package        runtime
+Summary:        Dynamic kernel patching
+Requires:       tar bash kmod
+BuildArch:      noarch
+%description    runtime
+Dynamic kernel patching
 
 %package_help
 
@@ -84,17 +88,26 @@ popd
 %{_prefix}/sbin/kpatch
 %{_datadir}/%{name}/*
 %{_sysconfdir}/init/*
-%{_bindir}/livepatch
-%{_bindir}/os_hotpatch
 /opt/patch_workspace/*
 %ifarch x86_64
 %{_prefix}/lib/kpatch
 %endif
 
+%files runtime
+%defattr(-,root,root)
+%{_bindir}/livepatch
+%{_bindir}/os_hotpatch
+
 %files help
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Mon Feb 17 2020 openEuler Buildteam <buildteam@openeuler.org> -2.0-3.1.23
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:add subpackage kpatch-runtime
+
 * Mon Dec 30 2019 openEuler Buildteam <buildteam@openeuler.org> -2.0-3.1.22
 - Type:enhancement
 - ID:NA
