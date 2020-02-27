@@ -1,0 +1,64 @@
+From 720769ca54d446baf9cbc986fd2a8832da45ce71 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Wed, 26 Feb 2020 21:01:02 -0500
+Subject: [PATCH 15/17] kpatch-build: ignore debuginfo in patch
+
+Just ignore all .debug_* sections
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 18 ++++++++++++++++++
+ kpatch-build/kpatch-build         |  1 +
+ 2 files changed, 19 insertions(+)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 4589ba4..c466eb0 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -2396,6 +2396,23 @@ static void kpatch_include_debug_sections(struct kpatch_elf *kelf)
+ 	}
+ }
+ 
++static void kpatch_ignore_debug_sections(struct kpatch_elf *kelf)
++{
++	struct section *sec;
++
++	/* include all .debug_* sections */
++	list_for_each_entry(sec, &kelf->sections, list) {
++		if (is_debug_section(sec)) {
++			sec->include = 0;
++			sec->status = SAME;
++			if (!is_rela_section(sec)) {
++				sec->secsym->include = 0;
++				sec->secsym->status = SAME;
++			}
++		}
++	}
++}
++
+ static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
+ {
+ 	struct section *sec, *strsec, *ignoresec;
+@@ -3645,6 +3662,7 @@ int main(int argc, char *argv[])
+ 	kpatch_include_standard_elements(kelf_patched);
+ 	num_changed = kpatch_include_changed_functions(kelf_patched);
+ 	kpatch_include_debug_sections(kelf_patched);
++	kpatch_ignore_debug_sections(kelf_patched);
+ 	callbacks_exist = kpatch_include_callback_elements(kelf_patched);
+ 	kpatch_include_force_elements(kelf_patched);
+ 	new_globals_exist = kpatch_include_new_globals(kelf_patched);
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index 57487b1..c109ee3 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -1143,6 +1143,7 @@ KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
+ KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
+ CROSS_COMPILE="$ARCH_COMPILE" \
+ 	make 2>&1 | logger || die
++${ARCH_COMPILE}strip -g "$TEMPDIR/patch/$MODNAME.ko"
+ 
+ if ! "$KPATCH_MODULE"; then
+ 	if [[ -z "$KPATCH_LDFLAGS" ]]; then
+-- 
+2.18.1
+

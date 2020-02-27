@@ -1,7 +1,7 @@
-From 0a92ec9f158340501151bf350050597414affece Mon Sep 17 00:00:00 2001
+From 16aa1e59851c29ce63b18f8ef5c570052c6a95af Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Fri, 2 Nov 2018 17:24:58 +0000
-Subject: [PATCH 1007/1015] create-diff-object: don't create dynamic reloc for
+Subject: [PATCH 06/17] create-diff-object: don't create dynamic reloc for
  symbol exported by patch itself
 
 when a patch export a new function, ___kcrctab+xxx has a reloc,
@@ -9,23 +9,23 @@ use origin reloc to get right symbol version.
 
 Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
- kpatch-build/create-diff-object.c |    3 +++
- 1 files changed, 3 insertions(+), 0 deletions(-)
+ kpatch-build/create-diff-object.c | 3 +++
+ 1 file changed, 3 insertions(+)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index bd7dd37..349e483 100644
+index 9f1abc0..18ed1f7 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -2808,6 +2808,9 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -3039,6 +3039,9 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  					if (!strcmp(sym_objname, "vmlinux"))
  						continue;
  
-+					if (!strcmp(sym_objname, pmod_name))
++					if (!strcmp(sym_objname, objname))
 +						continue;
 +
  					external = 1;
  				}
  			}
 -- 
-1.7.5.4
+2.18.1
 

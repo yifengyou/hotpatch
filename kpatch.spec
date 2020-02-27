@@ -1,8 +1,8 @@
-%global raw_version 0.6.1
+%global raw_version 0.9.0
 
 Name:           kpatch
 Version:        2.0
-Release:        3.1.23
+Release:        3.1.24
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -13,36 +13,23 @@ Source1:        os_hotpatch
 Source2:        livepatch
 Source3:        make_hotpatch
 
-Patch9001:      9001-livepatch-patch-hook-don-t-active-patch-when-insmod.patch
-Patch9002:      9002-kpatch-build-support-third-party-module-make-hotpatc.patch
-Patch9003:      9003-kpatch-build-support-makefile-not-in-third-party-mod.patch
-Patch9004:      9004-create-diff-object-new-static-var-should-be-included.patch
-Patch9005:      9005-livepatch-fix-use-THIS-modname-as-the-name-of-ddebug.patch
-Patch9006:      9006-create-diff-object-fix-correlate-static-local-variab.patch
-Patch9007:      9007-create-diff-object-don-t-create-dynamic-reloc-for-sy.patch
-Patch9008:      9008-livepatch-patch-hook-support-force-enable-disable-fu.patch
-Patch9009:      9009-kmod-kpatch-build-support-build-patch-for-old-kernel.patch
-Patch9010:      9010-kmod-kpatch-build-support-cross-compile-hotpatch-for.patch
-Patch9011:      9011-kpatch-build-use-.klp.rela-in-euleros-7.5-kernel.patch
-Patch9012:      9012-create-diff-object-create-dynamic-relocs-for-changed.patch
-Patch9013:      9013-kmod-kpatch-build-fix-duplicate-symbol-relocation-fo.patch
-Patch9014:      9014-create-diff-object-add-dynamic-reloction-for-functio.patch
-Patch9015:      9015-create-diff-object-exclude-line-only-change-for-arm6.patch
-Patch9016:      9016-kpatch-build-include-secsym-in-kpatch_mark_ignored_s.patch
-Patch9017:      9017-support-compile-kpatch-on-aarch64.patch
-Patch9018:      9018-support-c-plus-kernel-module.patch
-Patch9019:      9019-fix-rodata.str-problem.patch
-Patch9020:      0001-Add-__addressable_-to-maybe_discarded_sym.patch
-Patch9021:      0002-kmod-patch-fix-patch-linking-with-4.20.patch
-Patch9022:      0003-kmod-patch-more-linking-fixes.patch
-Patch9023:      9023-kpatch-build-adapt-for-ksymtab-in-4.19-kernel.patch
-Patch9024:      9024-support-force-enable-disable-for-kernel-4.19.patch
-Patch9025:      9025-kpatch-build-adapt-for-native-compile_env.patch
-Patch9026:      9026-add-find_special_section_data_arm64-for-arm64.patch
-Patch9027:      9027-fix-ref-static-local-symbol-for-longname-symbol.patch
-Patch9028:      9028-add-object-in-kpatch.patch
-Patch9029:      0004-create-diff-object-allow-changing-subsections.patch
-Patch9030:      9030-kmod-core-fix-compilation-with-CONFIG_HAVE_ARCH_PREL.patch
+Patch0001:0001-support-compile-kpatch-on-aarch64.patch
+Patch0002:0002-kpatch-build-support-build-patch-for-aarch64.patch
+Patch0003:0003-create-diff-object-new-static-var-should-be-included.patch
+Patch0004:0004-livepatch-fix-use-THIS-modname-as-the-name-of-ddebug.patch
+Patch0005:0005-create-diff-object-fix-correlate-static-local-variab.patch
+Patch0006:0006-create-diff-object-don-t-create-dynamic-reloc-for-sy.patch
+Patch0007:0007-create-diff-object-create-dynamic-relocs-for-changed.patch
+Patch0008:0008-fix-rodata.str-problem.patch
+Patch0009:0009-livepatch-patch-hook-don-t-active-patch-when-insmod.patch
+Patch0010:0010-kpatch-build-enhance-for-out-of-tree-module.patch
+Patch0011:0011-support-c-plus-kernel-module.patch
+Patch0012:0012-symbol-lookup-enhancement.patch
+Patch0013:0013-Add-running-kernel-symbol-table-to-help-symbol-looku.patch
+Patch0014:0014-livepatch-patch-hook-support-force-enable-disable.patch
+Patch0015:0015-kpatch-build-ignore-debuginfo-in-patch.patch
+Patch0016:0016-add-object-in-kpatch.patch
+Patch0017:0017-create-diff-object-fix-.orc_unwind_ip-error.patch
 
 BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel kernel-devel
 Requires:       bc
@@ -89,9 +76,6 @@ popd
 %{_datadir}/%{name}/*
 %{_sysconfdir}/init/*
 /opt/patch_workspace/*
-%ifarch x86_64
-%{_prefix}/lib/kpatch
-%endif
 
 %files runtime
 %defattr(-,root,root)
@@ -102,6 +86,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Wed Feb 26 2020 Zhipeng Xie<kangenbo@huawei.com> -2.0-3.1.24
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:rebase from upstream version v0.9.0
+
 * Mon Feb 17 2020 openEuler Buildteam <buildteam@openeuler.org> -2.0-3.1.23
 - Type:enhancement
 - ID:NA

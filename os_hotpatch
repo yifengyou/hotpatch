@@ -1,17 +1,21 @@
 #!/bin/sh
-# Copyright (C) 2019. Huawei Technologies Co., Ltd. All rights reserved.
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License version 2 and
-# only version 2 as published by the Free Software Foundation.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
+#********************************************************************
+#            Copyright (C) Huawei Technologies, 2015-11
+# 
+#  #FileName                : make_hotpatch
+#  #Description             : make hotpatch
+#  #Author                  : 
+#  #Language                : shell    
+#  #Environment             : Euler compile env
+#  #Created                 : 2015-11
+#  #History
+#    1.Date:
+#      Author:
+#      Modification:2015-12-7
+#********************************************************************
 
 SYS_LIVEPATCH=/sys/kernel/livepatch
-G_TMP_DIR=/tmp/hotpatch.$$
+G_TMP_DIR=/lib/modules/hotpatch.$$
 G_PATCH_FILE=
 
 #########################################################
@@ -21,14 +25,14 @@ G_PATCH_FILE=
 #########################################################
 OS_HP_HELP()
 {
-    echo "usage: os_hotpatch"
-    echo "-w|--check <filepath>         : check hotpatch"
-    echo "-l|--load <filepath>          : load hotpatch"
-    echo "-a|--active <patchname>       : active hotpatch"
-    echo "-r|--rollback <patchname>     : rollback/deactive hotpatch"
-    echo "-d|--delete <patchname>       : delete/unload hotpatch"
-    echo "-q|--query <patchname>/all    : query hotpatch"
-    echo "-h|--help                     : show this help information"
+	echo "usage: os_hotpatch"
+	echo "-w|--check <filepath>         : check hotpatch"
+	echo "-l|--load <filepath>          : load hotpatch"
+	echo "-a|--active <patchname>       : active hotpatch"
+	echo "-r|--rollback <patchname>     : rollback/deactive hotpatch"
+	echo "-d|--delete <patchname>       : delete/unload hotpatch"
+	echo "-q|--query <patchname>/all    : query hotpatch"
+	echo "-h|--help                     : show this help information"
 }
 
 #########################################################
@@ -39,20 +43,20 @@ OS_HP_HELP()
 #########################################################
 OS_HP_CHECK()
 {
-    path=$1
-    if [ ! -f "$path" ]; then
-        echo "The file $path is not exit"
-        exit 1;
-    fi
-    EXTRACT_HP $path
-    if [ $? -ne 0 -o ! -f "$G_PATCH_FILE" ];then
-    	echo "The file $path is invalid"
+	path=$1
+	if [ ! -f "$path" ]; then
+		echo "The file $path is not exit"
+		exit 1;
+	fi
+	EXTRACT_HP $path
+	if [ $? -ne 0 -o ! -f "$G_PATCH_FILE" ];then
+		echo "The file $path is invalid"
+		CLEAN_UP
+		exit 1;
+	fi
 	CLEAN_UP
-	exit 1;
-    fi
-    CLEAN_UP
-    echo "The file $path is valid"
-    exit 0
+	echo "The file $path is valid"
+	exit 0
 }
 
 #########################################################
@@ -63,30 +67,30 @@ OS_HP_CHECK()
 #########################################################
 OS_HP_ACTIVE()
 {
-    file=$1
-    patch_name=`echo ${file%.tar.gz}|tr '-' '_'`
-    patch_install=`lsmod | grep  -w $patch_name`
+	file=$1
+	patch_name=`echo ${file%.tar.gz}|tr '-' '_'`
+	patch_install=`lsmod | grep  -w $patch_name`
 
-    if [ "$patch_install" == "" ]; then
-        echo "patch $file not load"
-        exit 1
-    fi
+	if [ "$patch_install" == "" ]; then
+		echo "patch $file not load"
+		exit 1
+	fi
 
-    is_active=`cat ${SYS_LIVEPATCH}/${patch_name}/enabled`
-    if [ ${is_active} == 1 ]; then
-	echo "patch already active"
-	exit 0
-    fi
+	is_active=`cat ${SYS_LIVEPATCH}/${patch_name}/enabled`
+	if [ ${is_active} == 1 ]; then
+		echo "patch already active"
+		exit 0
+	fi
 
-    echo 1 > ${SYS_LIVEPATCH}/${patch_name}/enabled 
-    is_active=`cat ${SYS_LIVEPATCH}/${patch_name}/enabled`
-    if [ ${is_active} == 1 ]; then
-	echo "active patch $file success"
-	exit 0
-    else
-        echo "active patch $file fail"
-        exit 1
-    fi
+	echo 1 > ${SYS_LIVEPATCH}/${patch_name}/enabled 
+	is_active=`cat ${SYS_LIVEPATCH}/${patch_name}/enabled`
+	if [ ${is_active} == 1 ]; then
+		echo "active patch $file success"
+		exit 0
+	else
+		echo "active patch $file fail"
+		exit 1
+	fi
 }
 
 #########################################################
@@ -97,30 +101,30 @@ OS_HP_ACTIVE()
 #########################################################
 OS_HP_DEACTIVE()
 {
-    file=$1
-    patch_name=`echo ${file%.tar.gz}|tr '-' '_'`
-    patch_install=`lsmod | grep -w $patch_name`
+	file=$1
+	patch_name=`echo ${file%.tar.gz}|tr '-' '_'`
+	patch_install=`lsmod | grep -w $patch_name`
 
-    if [ "$patch_install" == "" ]; then
-        echo "patch $file not load"
-        exit 1
-    fi
+	if [ "$patch_install" == "" ]; then
+		echo "patch $file not load"
+		exit 1
+	fi
 
-    is_active=`cat ${SYS_LIVEPATCH}/${patch_name}/enabled`
-    if [ ${is_active} == 0 ]; then
-        echo "patch $file already deactive"
-        exit 0
-    else
-	echo 0 > ${SYS_LIVEPATCH}/${patch_name}/enabled 
-        is_active=`cat ${SYS_LIVEPATCH}/${patch_name}/enabled`
-        if [ ${is_active} != 1 ]; then
-            echo "deactive patch $file success"
-            exit 0
+	is_active=`cat ${SYS_LIVEPATCH}/${patch_name}/enabled`
+	if [ ${is_active} == 0 ]; then
+		echo "patch $file already deactive"
+		exit 0
 	else
-	    echo "deactive patch $file fail"
-	    exit 1
-        fi
-    fi
+		echo 0 > ${SYS_LIVEPATCH}/${patch_name}/enabled 
+		is_active=`cat ${SYS_LIVEPATCH}/${patch_name}/enabled`
+		if [ ${is_active} != 1 ]; then
+			echo "deactive patch $file success"
+			exit 0
+		else
+			echo "deactive patch $file fail"
+			exit 1
+		fi
+	fi
 }
 
 #########################################################
@@ -131,31 +135,31 @@ OS_HP_DEACTIVE()
 #########################################################
 OS_HP_REMOVE()
 {
-    file=$1
-    patch_name=`echo ${file%.tar.gz}|tr '-' '_'`
-    patch_install=`lsmod | grep -w $patch_name`
+	file=$1
+	patch_name=`echo ${file%.tar.gz}|tr '-' '_'`
+	patch_install=`lsmod | grep -w $patch_name`
 
-    if [ "$patch_install" == "" ]; then
-        echo "patch $file not load"
-        exit 1
-    fi
- 
-    is_active=`cat ${SYS_LIVEPATCH}/${patch_name}/enabled`
-    if [ ${is_active} == 0 ]; then
-	rmmod ${patch_name}
-    else
-	echo 0 > ${SYS_LIVEPATCH}/${patch_name}/enabled 
-	rmmod ${patch_name}
-    fi
+	if [ "$patch_install" == "" ]; then
+		echo "patch $file not load"
+		exit 1
+	fi
 
-    patch_install=`lsmod | grep -w $patch_name`
-    if [ "$patch_install" == "" ]; then
-        echo "remove patch $file success"
-        exit 0
-    else
-        echo "remove patch $file failed"
-        exit 1
-    fi
+	is_active=`cat ${SYS_LIVEPATCH}/${patch_name}/enabled`
+	if [ ${is_active} == 0 ]; then
+		rmmod ${patch_name}
+	else
+		echo 0 > ${SYS_LIVEPATCH}/${patch_name}/enabled 
+		rmmod ${patch_name}
+	fi
+
+	patch_install=`lsmod | grep -w $patch_name`
+	if [ "$patch_install" == "" ]; then
+		echo "remove patch $file success"
+		exit 0
+	else
+		echo "remove patch $file failed"
+		exit 1
+	fi
 }
 
 #########################################################
@@ -166,61 +170,61 @@ OS_HP_REMOVE()
 #########################################################
 OS_HP_INQUIRY()
 {
-    file=$1
-    lret=0
-    if [ "all" == $file ];then
-	cd ${SYS_LIVEPATCH}
-	if [ -z "`ls -d */ 2>/dev/null`" ];then
+	file=$1
+	lret=0
+	if [ "all" == $file ];then
+		cd ${SYS_LIVEPATCH}
+		if [ -z "`ls -d */ 2>/dev/null`" ];then
+			exit 0
+		fi
+		for patch in `ls -d */ 2>/dev/null`
+		do
+			patch_id=${patch%/}
+			patch_id=${patch_id#klp_}
+			echo "Patch Name: ${patch_id}"
+			lstate=`cat /${SYS_LIVEPATCH}/${patch}/enabled 2>/dev/null`
+			if [ -z "$lstate" ];then
+				echo "Patch State: Removing"
+				echo "-----------------------------------------------------------"
+				continue
+			fi
+			if [ $lstate -eq 1 ];then
+				echo "Patch State: Active"
+			else
+				echo "Patch State: Deactive"
+			fi
+			cd ${SYS_LIVEPATCH}/${patch} 2>/dev/null
+			depends=`ls -d */ 2>/dev/null`
+			echo "Changes:"
+			ls -l ${SYS_LIVEPATCH}/${patch}/*/ 2>/dev/null|grep '^d'|awk -F ' ' '{print "\t"$9}'
+			echo "Denpendency: ${depends%/}"
+			echo "-----------------------------------------------------------"
+		done
 		exit 0
 	fi
-	for patch in `ls -d */ 2>/dev/null`
-	do
-		patch_id=${patch%/}
-		patch_id=${patch_id#klp_}
-		echo "Patch Name: ${patch_id}"
-		lstate=`cat /${SYS_LIVEPATCH}/${patch}/enabled 2>/dev/null`
-		if [ -z "$lstate" ];then
-			echo "Patch State: Removing"
-			echo "-----------------------------------------------------------"
-			continue
-		fi
-		if [ $lstate -eq 1 ];then
-			echo "Patch State: Active"
-		else
-			echo "Patch State: Deactive"
-		fi
-		cd ${SYS_LIVEPATCH}/${patch} 2>/dev/null
-		depends=`ls -d */ 2>/dev/null`
-		echo "Changes:"
-		ls -l ${SYS_LIVEPATCH}/${patch}/*/ 2>/dev/null|grep '^d'|awk -F ' ' '{print "\t"$9}'
-		echo "Denpendency: ${depends%/}"
-		echo "-----------------------------------------------------------"
-	done
-	exit 0
-    fi
-    patch=`echo ${file%.tar.gz}|tr '-' '_'`
-    patch_install=`lsmod | grep -w $patch`
-    if [ "$patch_install" == "" ]; then
-        exit 1
-    fi
-		patch_id=${patch%/}
-		patch_id=${patch_id#klp_}
-                echo "Patch Name: ${patch_id}"
-                if [ `cat /${SYS_LIVEPATCH}/${patch}/enabled` -eq 1 ];then
-                        echo "Patch State: Active"
-				lret=3
-                else
-                        echo "Patch State: Deactive"
-				lret=2
-                fi
-                cd ${SYS_LIVEPATCH}/${patch}
-                depends=`ls -d */ 2>/dev/null`
-                echo "Changes:"
-                ls -l ${SYS_LIVEPATCH}/${patch}/*/ 2>/dev/null|grep '^d'|awk -F ' ' '{print "\t"$9}'
-                echo "Denpendency: ${depends%/}"
-                echo "-----------------------------------------------------------"
+	patch=`echo ${file%.tar.gz}|tr '-' '_'`
+	patch_install=`lsmod | grep -w $patch`
+	if [ "$patch_install" == "" ]; then
+		exit 1
+	fi
+	patch_id=${patch%/}
+	patch_id=${patch_id#klp_}
+	echo "Patch Name: ${patch_id}"
+	if [ `cat /${SYS_LIVEPATCH}/${patch}/enabled` -eq 1 ];then
+		echo "Patch State: Active"
+		lret=3
+	else
+		echo "Patch State: Deactive"
+		lret=2
+	fi
+	cd ${SYS_LIVEPATCH}/${patch}
+	depends=`ls -d */ 2>/dev/null`
+	echo "Changes:"
+	ls -l ${SYS_LIVEPATCH}/${patch}/*/ 2>/dev/null|grep '^d'|awk -F ' ' '{print "\t"$9}'
+	echo "Denpendency: ${depends%/}"
+	echo "-----------------------------------------------------------"
 
-    exit $lret
+	exit $lret
 }
 #########################################################
 #    Description: extract hotpatch tar to tmp dir
@@ -230,11 +234,12 @@ OS_HP_INQUIRY()
 #########################################################
 EXTRACT_HP()
 {
-	mkdir $G_TMP_DIR
+	rm -rf $G_TMP_DIR
+	mkdir -p $G_TMP_DIR
 	tar xzf $1 -C $G_TMP_DIR
 	l_ret=$?
 	if [ $l_ret -eq 0 ];then
-                #find the hotpatch module
+		#find the hotpatch module
 		G_PATCH_FILE=$(find $G_TMP_DIR|grep -w "klp.*\.ko")
 		return 0
 	else
@@ -248,7 +253,7 @@ EXTRACT_HP()
 #########################################################
 CLEAN_UP()
 {
-    rm -rf $G_TMP_DIR
+	rm -rf $G_TMP_DIR
 }
 #########################################################
 #    Description: install a hotpatch
@@ -258,80 +263,80 @@ CLEAN_UP()
 #########################################################
 OS_HP_INSTALL()
 {
-    path=$1
+	path=$1
 
-    if [ ! -f "$path" ]; then
-        echo "The file $path is not exit"
-        exit 1;
-    fi
-    EXTRACT_HP $path
-    if [ $? -ne 0 -o ! -f "$G_PATCH_FILE" ];then
-	echo "The file $path is invalid!"
+	if [ ! -f "$path" ]; then
+		echo "The file $path is not exit"
+		exit 1;
+	fi
+	EXTRACT_HP $path
+	if [ $? -ne 0 -o ! -f "$G_PATCH_FILE" ];then
+		echo "The file $path is invalid!"
+		CLEAN_UP
+		exit 1;
+	fi
+	patch_name=`echo ${G_PATCH_FILE%.ko}|tr '-' '_'`
+	patch_name=${patch_name##*/}
+	patch_install=`lsmod | grep -w $patch_name`
+	if [ "$patch_install" == "" ]; then
+		echo "insmod $G_PATCH_FILE"
+		insmod $G_PATCH_FILE
+		L_RET=$?
+		if [  0 -ne ${L_RET} ]; then
+			echo "install patch $path fail"
+			CLEAN_UP
+			return 1
+		else
+			echo "install patch $path success"
+		fi
+	else
+		echo "patch $path already install"
+	fi
 	CLEAN_UP
-	exit 1;
-    fi
-    patch_name=`echo ${G_PATCH_FILE%.ko}|tr '-' '_'`
-    patch_name=${patch_name##*/}
-    patch_install=`lsmod | grep -w $patch_name`
-    if [ "$patch_install" == "" ]; then
-	echo "insmod $G_PATCH_FILE"
-        insmod $G_PATCH_FILE
-        L_RET=$?
-        if [  0 -ne ${L_RET} ]; then
-            echo "install patch $path fail"
-	    CLEAN_UP
-            return 1
-        else
-            echo "install patch $path success"
-        fi
-    else
-        echo "patch $path already install"
-    fi
-    CLEAN_UP
-    return 0
+	return 0
 }
 
 #----------------------------main-------------------------#
 if [ ! -d ${SYS_LIVEPATCH} ];then
-        echo "this OS does not support kernel livepatch"
-        exit 1
+	echo "this OS does not support kernel livepatch"
+	exit 1
 fi
 input_args=`getopt -a -o l:a:r:d:w:q: -l load:,active:,delete:,check:,rollback:,query:,help,  -- "$@" 2>&1`
 eval set -- "${input_args}"
 while true;
 do
-        case "$1" in
-                -w|--check)
-                        OS_HP_CHECK "$2"
-                        exit $?
-                        ;;
-                -l|--load)
-                        OS_HP_INSTALL "$2"
-                        exit $?
-                        ;;
-                -a|--active)
-                        OS_HP_ACTIVE "$2"
-                        exit $?
-                        ;;
-                -r|--rollback)
-                        OS_HP_DEACTIVE "$2"
-                        exit $?
-                        ;;
-                -d|--delete)
-                        OS_HP_REMOVE "$2"
-                        exit $?
-                        ;;
-                -q|--query)
-                        OS_HP_INQUIRY "$2"
-                        exit $?
-                        ;;
-                -h|--help)
-                        OS_HP_HELP
-                        exit 0
-                        ;;
-                *)
-                        OS_HP_HELP
-                        exit 1
-                        ;;
-        esac
+	case "$1" in
+		-w|--check)
+			OS_HP_CHECK "$2"
+			exit $?
+			;;
+		-l|--load)
+			OS_HP_INSTALL "$2"
+			exit $?
+			;;
+		-a|--active)
+			OS_HP_ACTIVE "$2"
+			exit $?
+			;;
+		-r|--rollback)
+			OS_HP_DEACTIVE "$2"
+			exit $?
+			;;
+		-d|--delete)
+			OS_HP_REMOVE "$2"
+			exit $?
+			;;
+		-q|--query)
+			OS_HP_INQUIRY "$2"
+			exit $?
+			;;
+		-h|--help)
+			OS_HP_HELP
+			exit 0
+			;;
+		*)
+			OS_HP_HELP
+			exit 1
+			;;
+	esac
 done

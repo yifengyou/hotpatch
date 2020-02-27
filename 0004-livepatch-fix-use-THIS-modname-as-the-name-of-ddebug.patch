@@ -1,7 +1,7 @@
-From 858cc1f1ef2565d6ffa539550fc13af7e62863e4 Mon Sep 17 00:00:00 2001
+From c03772c4e29473eae68009c12efc182238d103c7 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Fri, 2 Nov 2018 17:24:42 +0000
-Subject: [PATCH 1005/1015] livepatch, fix: use THIS modname as the name of
+Subject: [PATCH 04/17] livepatch, fix: use THIS modname as the name of
  ddebug_table
 
 We just want a unique name for every module, so put a _ddebug in
@@ -12,21 +12,21 @@ Suggested-by: Li Bin <huawei.libin@huawei.com>
 Signed-off-by: Zhou Chengming <zhouchengming1@huawei.com>
 Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
- kmod/patch/livepatch-patch-hook.c |    1 +
- 1 files changed, 1 insertions(+), 0 deletions(-)
+ kmod/patch/livepatch-patch-hook.c | 1 +
+ 1 file changed, 1 insertion(+)
 
 diff --git a/kmod/patch/livepatch-patch-hook.c b/kmod/patch/livepatch-patch-hook.c
-index e59a377..2c0cadd 100644
+index e12fd50..613d037 100644
 --- a/kmod/patch/livepatch-patch-hook.c
 +++ b/kmod/patch/livepatch-patch-hook.c
-@@ -452,6 +452,7 @@ out:
+@@ -473,6 +473,7 @@ out:
  
  static void __exit patch_exit(void)
  {
-+        pr_debug("make THIS modname first\n");
++    pr_debug("make THIS modname first\n");
+ #ifndef HAVE_SIMPLE_ENABLE
  	WARN_ON(klp_unregister_patch(lpatch));
- }
- 
+ #endif
 -- 
-1.7.5.4
+2.18.1
 
