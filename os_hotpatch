@@ -1,18 +1,14 @@
 #!/bin/sh
-#********************************************************************
-#            Copyright (C) Huawei Technologies, 2015-11
-# 
-#  #FileName                : make_hotpatch
-#  #Description             : make hotpatch
-#  #Author                  : 
-#  #Language                : shell    
-#  #Environment             : Euler compile env
-#  #Created                 : 2015-11
-#  #History
-#    1.Date:
-#      Author:
-#      Modification:2015-12-7
-#********************************************************************
+# Copyright (C) 2019. Huawei Technologies Co., Ltd. All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 and
+# only version 2 as published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
 
 SYS_LIVEPATCH=/sys/kernel/livepatch
 G_TMP_DIR=/lib/modules/hotpatch.$$
