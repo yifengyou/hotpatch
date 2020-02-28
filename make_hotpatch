@@ -1,14 +1,18 @@
-#!/bin/bash
-# Copyright (C) 2019. Huawei Technologies Co., Ltd. All rights reserved.
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License version 2 and
-# only version 2 as published by the Free Software Foundation.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
+#!/usr/bin/bash
+#********************************************************************
+#            Copyright (C) Huawei Technologies, 2015-11
+# 
+#  #FileName                : make_hotpatch
+#  #Description             : make hotpatch
+#  #Author                  : 
+#  #Language                : shell    
+#  #Environment             : Euler compile env
+#  #Created                 : 2015-11
+#  #History
+#    1.Date:
+#      Author:
+#      Modification:
+#********************************************************************
 
 SHELL_DIR=$(dirname $0)
 SHELL_DIR=$(cd $SHELL_DIR; pwd)
@@ -72,12 +76,12 @@ Options:
     -p,--patch
             Specifies the patch file
     --kallsyms
-	        Specifies module kallsyms in running system(cat /proc/kallsyms|grep mod)
+            Specifies module kallsyms in running system(cat /proc/kallsyms|grep mod)
     -h,--help
             help info
 EOF
 
-    return 0
+return 0
 }
 
 
@@ -94,7 +98,7 @@ function fn_do_clean()
     unset NO_STACK_CHECK
     unset KALLSYMS
     rm -rf $G_TMP_DIR
-    
+
 }
 
 #########################################################
@@ -109,7 +113,7 @@ function fn_check_reg_char()
     local l_str_maxlen=$2
     local l_str_ex=$3
     local len_str=${#l_str}
-    
+
     if [ -z "$l_str" ];then
         echo "error: the string is empty, check string failed"
         return 1
@@ -139,10 +143,10 @@ function fn_check_reg_char()
         else
             echo "error: string $l_str can only contain characters included by ('0-9', 'a-z', 'A-Z', '-', '_')."
         fi
-        
+
         return 1
     fi    
-    
+
 }
 
 #########################################################
@@ -159,7 +163,7 @@ function fn_check_id()
         echo "error: check hotpatch id failed"
         return 1
     fi
-    
+
     G_HOTPATCH_ID=$l_id
     G_HOTPATCH=${G_PREFIX}_${G_HOTPATCH_ID}.ko
     G_HOTPATCH_TAR=${G_PREFIX}_${G_HOTPATCH_ID}.tar.gz
@@ -197,8 +201,8 @@ function fn_check_jobs()
 function fn_check_patch(){
     local l_patch=$1
     if [ ! -f $1 ];then
-	echo "error:patch file $1 not exit"
-	return 1
+        echo "error:patch file $1 not exist"
+        return 1
     fi
     G_PATCHFILE=$l_patch
 }
@@ -324,136 +328,136 @@ function fn_verify_input()
     fi
 
     if [ -z "`echo "$input_param" | grep -w "\-i"`" \
-	-a -z "`echo $input_param | grep -w "\-\-id"`" \
-	-a $# -gt 1 ];then
-        echo "error: missing param -i or --id"
-        fn_do_clean
-        fn_usage
-        exit 1
-    fi
-    if [ -z "`echo "$input_param" | grep -w "\-d"`" \
-	-a -z "`echo $input_param | grep -w "\-\-diffext"`" \
-	-a -z "`echo $input_param | grep -w "\-p"`" \
-	-a -z "`echo $input_param | grep -w "\-\-patch"`" \
-	-a $# -gt 1 ];then
-        echo "error: missing param -d,--diffext or -p,--patch"
-        fn_do_clean
-        fn_usage
-        exit 1
+        -a -z "`echo $input_param | grep -w "\-\-id"`" \
+        -a $# -gt 1 ];then
+    echo "error: missing param -i or --id"
+    fn_do_clean
+    fn_usage
+    exit 1
+fi
+if [ -z "`echo "$input_param" | grep -w "\-d"`" \
+    -a -z "`echo $input_param | grep -w "\-\-diffext"`" \
+    -a -z "`echo $input_param | grep -w "\-p"`" \
+    -a -z "`echo $input_param | grep -w "\-\-patch"`" \
+    -a $# -gt 1 ];then
+echo "error: missing param -d,--diffext or -p,--patch"
+fn_do_clean
+fn_usage
+exit 1
     fi
 
     while [ $# -ge 1 ]; do
         case "$1" in
-        -h|--help)
-            fn_usage
-            fn_do_clean
-            exit 0
-        ;;
-        -j|--jobs)
-            fn_check_jobs $2
-            if [ $? -eq 0 ]; then
-                shift 2
-            else
-                fn_do_clean
+            -h|--help)
                 fn_usage
-                exit 1
-            fi
-        ;;        
-        -i|--id)
-            fn_check_id $2
-            if [ $? -eq 0 ]; then
-                shift 2
-            else
                 fn_do_clean
-                fn_usage
-                exit 1
-            fi
-        ;;
-        -d|--diffext)
-            fn_check_diffext $2
-            if [ $? -eq 0 ]; then
-                shift 2
-            else
-                fn_do_clean
-                fn_usage
-                exit 1
-            fi
-        ;;
-	-p|--patch)
-	    fn_check_patch $2
-            if [ $? -eq 0 ]; then
-                shift 2
-            else
-                fn_do_clean
-                fn_usage
-                exit 1
-            fi
-	;;
-        -k|--kernelsrc)
-            fn_check_kernelsrc $2
-            if [ $? -eq 0 ]; then
-                shift 2
-            else
-                fn_do_clean
-                fn_usage
-                exit 1
-            fi
-        ;;
-        -m|--modulesrc)
-            fn_check_modulesrc $2
-            if [ $? -eq 0 ]; then
-                shift 2
-            else
-                fn_do_clean
-                fn_usage
-                exit 1
-            fi
-        ;;
-        -f|--makefile)
-            fn_check_makefile $2
-            if [ $? -eq 0 ]; then
-                shift 2
-            else
-                fn_do_clean
-                fn_usage
-                exit 1
-            fi
-        ;;
-        --extra_flags)
-            fn_check_extra_flags $2
-            if [ $? -eq 0 ]; then
-                shift 2
-            else
-                fn_do_clean
-                fn_usage
-                exit 1
-            fi
-        ;;
-        --no_stack_check)
+                exit 0
+                ;;
+            -j|--jobs)
+                fn_check_jobs $2
+                if [ $? -eq 0 ]; then
+                    shift 2
+                else
+                    fn_do_clean
+                    fn_usage
+                    exit 1
+                fi
+                ;;        
+            -i|--id)
+                fn_check_id $2
+                if [ $? -eq 0 ]; then
+                    shift 2
+                else
+                    fn_do_clean
+                    fn_usage
+                    exit 1
+                fi
+                ;;
+            -d|--diffext)
+                fn_check_diffext $2
+                if [ $? -eq 0 ]; then
+                    shift 2
+                else
+                    fn_do_clean
+                    fn_usage
+                    exit 1
+                fi
+                ;;
+            -p|--patch)
+                fn_check_patch $2
+                if [ $? -eq 0 ]; then
+                    shift 2
+                else
+                    fn_do_clean
+                    fn_usage
+                    exit 1
+                fi
+                ;;
+            -k|--kernelsrc)
+                fn_check_kernelsrc $2
+                if [ $? -eq 0 ]; then
+                    shift 2
+                else
+                    fn_do_clean
+                    fn_usage
+                    exit 1
+                fi
+                ;;
+            -m|--modulesrc)
+                fn_check_modulesrc $2
+                if [ $? -eq 0 ]; then
+                    shift 2
+                else
+                    fn_do_clean
+                    fn_usage
+                    exit 1
+                fi
+                ;;
+            -f|--makefile)
+                fn_check_makefile $2
+                if [ $? -eq 0 ]; then
+                    shift 2
+                else
+                    fn_do_clean
+                    fn_usage
+                    exit 1
+                fi
+                ;;
+            --extra_flags)
+                fn_check_extra_flags $2
+                if [ $? -eq 0 ]; then
+                    shift 2
+                else
+                    fn_do_clean
+                    fn_usage
+                    exit 1
+                fi
+                ;;
+            --no_stack_check)
                 export NO_STACK_CHECK="yes"
                 shift 1
-        ;;
-        --debug_info)
+                ;;
+            --debug_info)
                 G_DEBUG_INFO="-d"                                                     
                 shift 1 
-        ;;
-        --kallsyms)
-	    export KALLSYMS=$(readlink -f $2)
-            if [ $? -eq 0 ]; then
+                ;;
+            --kallsyms)
+                if [ "$2" == "" ];then
+                    echo "error: param --kallsyms need file parameter"
+                    fn_do_clean
+                    fn_usage
+                    exit 1
+                fi
+                export KALLSYMS=$(readlink -f $2)
                 shift 2
-            else
+                ;;
+
+            *)
+                echo "error: params is invalid,please check it."
                 fn_do_clean
                 fn_usage
                 exit 1
-            fi
-        ;;
-
-        *)
-            echo "error: params is invalid,please check it."
-            fn_do_clean
-            fn_usage
-            exit 1
-        ;;
+                ;;
         esac
     done
 
@@ -474,11 +478,11 @@ function fn_init_module_build()
     local module=
 
     module=`basename $l_modulesrc`
-    
+
     if [ ! -e $G_PRIVATE_MODULE ];then
         mkdir -p $G_PRIVATE_MODULE
     fi
-    
+
     rm -rf $G_PRIVATE_MODULE/*
     if [ $? -ne 0 ];then
         echo "error: remove $G_PRIVATE_MODULE/$module or Makefile failed"
@@ -534,14 +538,15 @@ function fn_makepatch()
 
     G_PATCH_SRC=`readlink -f $G_KERNEL_SRC`
     if [ -d "$G_MODULE_SRC" ];then
-	echo "make out of tree module hotpath"
-	G_PATCH_SRC=$G_MODULE_SRC
+        echo "make out of tree module hotpath"
+        G_PATCH_SRC=$G_MODULE_SRC
         #fn_init_module_build $G_MODULE_SRC $G_MODULE_MAKEFILE
         #if [ $? -ne 0 ];then
         #    echo "error: init module build failed"
         #    return 1
         #fi
         l_extra_module="-m $G_MODULE_SRC"
+        USERMODBUILDDIR=$G_MODULE_SRC
     fi 
 
     if [ -n "$G_JOBS" ];then
@@ -551,63 +556,61 @@ function fn_makepatch()
     mkdir -p $G_TMP_DIR
 
     if [ -z "$G_PATCHFILE" ];then
-	#generate src patch file from G_DIFFEXT
-	G_PATCHFILE=$G_TMP_DIR/$G_HOTPATCH_ID.patch
-    	rm -rf $G_PATCHFILE
-	cd $G_PATCH_SRC &>/dev/null
-	l_change_file=($(find -L -name "*$G_DIFFEXT" | xargs readlink -f 2>/dev/null| sort | uniq))
-	echo "detect change files:${l_change_file[@]}"
-	for file in ${l_change_file[@]};
-    	do
-                file="./${file#$(readlink -f $G_PATCH_SRC)}"
-                orig_file=${file%$G_DIFFEXT}
-                if [ "${orig_file##*.}" == "h" ]; then
-                        existflag=1 && break
-                fi
-                diff -u $orig_file $file >> $G_PATCHFILE
-	done
-	cd - &>/dev/null
-	if [ ${existflag} -eq 1 ]; then
-		echo "error: do not modify the header file"
-		return 1
-	fi
-	if [ -f $G_PATCHFILE ];then
-		echo "make patch $G_PATCHFILE"
-	else
-		echo "no change detected"
-		return 1	
-	fi
+        #generate src patch file from G_DIFFEXT
+        G_PATCHFILE=$G_TMP_DIR/$G_HOTPATCH_ID.patch
+        rm -rf $G_PATCHFILE
+        cd $G_PATCH_SRC &>/dev/null
+        l_change_file=($(find -L -name "*$G_DIFFEXT" | xargs readlink -f 2>/dev/null| sort | uniq))
+        echo "detect change files:${l_change_file[@]}"
+        for file in ${l_change_file[@]};
+        do
+            file="./${file#$(readlink -f $G_PATCH_SRC)}"
+            orig_file=${file%$G_DIFFEXT}
+            if [ "${orig_file##*.}" == "h" ]; then
+                existflag=1 && break
+            fi
+            diff -u $orig_file $file >> $G_PATCHFILE
+        done
+        cd - &>/dev/null
+        if [ ${existflag} -eq 1 ]; then
+            echo "error: do not modify the header file"
+            return 1
+        fi
+        if [ -f $G_PATCHFILE ];then
+            echo "make patch $G_PATCHFILE"
+        else
+            echo "no change detected"
+            return 1	
+        fi
     else
-	cp $G_PATCHFILE $G_TMP_DIR/${G_HOTPATCH_ID}.patch
-	G_PATCHFILE=$G_TMP_DIR/${G_HOTPATCH_ID}.patch
+        cp $G_PATCHFILE $G_TMP_DIR/${G_HOTPATCH_ID}.patch
+        G_PATCHFILE=$G_TMP_DIR/${G_HOTPATCH_ID}.patch
     fi
 
 
     cd $G_TMP_DIR &>/dev/null
     if [ -n "$G_MODULE_MAKEFILE" ];then
-            USERMODBUILDDIR=$(dirname $G_MODULE_MAKEFILE)
+        USERMODBUILDDIR=$(dirname $G_MODULE_MAKEFILE)
     fi
     export USERMODBUILDDIR
     export USERMODFLAGS=`cat $G_KPATCH_FLAGS`
-    export NO_PROFILING_CALLS=yes
-    kpatch-build -s $G_KERNEL_SRC $l_extra_module  -c $G_KERNEL_CONFIG -v $G_VMLINUX --skip-gcc-check -n "${G_PREFIX}_${G_HOTPATCH_ID}" -b /lib/modules/`uname -r`/build $G_DEBUG_INFO $G_PATCHFILE 
+    export NO_PROFILING_CALLS="yes"
+    export DISABLE_AFTER_LOAD="yes"
+    kpatch-build -s $G_PATCH_SRC -c $G_KERNEL_CONFIG -v $G_VMLINUX --skip-gcc-check -n "${G_PREFIX}_${G_HOTPATCH_ID}" $G_DEBUG_INFO $G_PATCHFILE
     l_ret=$?
     cd - &>/dev/null
     if [ $l_ret -eq 0 ] && [ -f "$G_TMP_DIR/$G_HOTPATCH" ];then
-        if grep -q "CONFIG_MODULE_SIG=y" .config ;then
-            echo "kernel compile with CONFIG_MODULE_SIG=y,please sign the patch module"
-        fi
-	cd /tmp &>/dev/null
+        cd /tmp &>/dev/null
         l_env_file=$G_TMP_DIR/toolenv
         if [ -n "`which rpm 2>/dev/null`" ]; then
-                echo "------------------------------------------------------------------------ " > "${l_env_file}"
-                echo >> "${l_env_file}"
-                echo "The kpatch tool version info and release date:" >> "${l_env_file}"
-                rpm -qi kpatch >> "${l_env_file}"
-                echo >> "${l_env_file}"
-                echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+            echo "------------------------------------------------------------------------ " > "${l_env_file}"
+            echo >> "${l_env_file}"
+            echo "The kpatch tool version info and release date:" >> "${l_env_file}"
+            rpm -qi kpatch >> "${l_env_file}"
+            echo >> "${l_env_file}"
+            echo "------------------------------------------------------------------------ " >> "${l_env_file}"
         else
-                echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+            echo "------------------------------------------------------------------------ " >> "${l_env_file}"
         fi
 
         echo >> "${l_env_file}"
@@ -617,41 +620,41 @@ function fn_makepatch()
         echo "------------------------------------------------------------------------ " >> "${l_env_file}"
 
         if [ -f "/etc/EulerLinux.conf" ]; then
-                echo >> "${l_env_file}"
-                echo "The euler compile env version info:" >> "${l_env_file}"
-                cat /etc/EulerLinux.conf >> "${l_env_file}"
-                echo >> "${l_env_file}"
-                echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+            echo >> "${l_env_file}"
+            echo "The euler compile env version info:" >> "${l_env_file}"
+            cat /etc/EulerLinux.conf >> "${l_env_file}"
+            echo >> "${l_env_file}"
+            echo "------------------------------------------------------------------------ " >> "${l_env_file}"
         fi
 
         if [ -n "${G_MODULE_SRC}" ]; then
-                echo >> "${l_env_file}"
-                echo "The module hotpatch compile path info:" >> "${l_env_file}"
-                echo "MODULE_SRC=${G_MODULE_SRC}" >> "${l_env_file}"
-                echo "MODULE_MAKEFILE=${G_MODULE_MAKEFILE}" >> "${l_env_file}"
-                echo >> "${l_env_file}"
-                echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+            echo >> "${l_env_file}"
+            echo "The module hotpatch compile path info:" >> "${l_env_file}"
+            echo "MODULE_SRC=${G_MODULE_SRC}" >> "${l_env_file}"
+            echo "MODULE_MAKEFILE=${G_MODULE_MAKEFILE}" >> "${l_env_file}"
+            echo >> "${l_env_file}"
+            echo "------------------------------------------------------------------------ " >> "${l_env_file}"
         fi
 
         if [ -f "${G_EXT_FLAGS}" ]; then
-                echo >> "${l_env_file}"
-                echo "The module hotpatch compile flags info:" >> "${l_env_file}"
-                cat "${G_EXT_FLAGS}" >> "${l_env_file}"
-                echo >> "${l_env_file}"
-                echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+            echo >> "${l_env_file}"
+            echo "The module hotpatch compile flags info:" >> "${l_env_file}"
+            cat "${G_EXT_FLAGS}" >> "${l_env_file}"
+            echo >> "${l_env_file}"
+            echo "------------------------------------------------------------------------ " >> "${l_env_file}"
         fi
 
         if [ -n "${G_DEBUG_INFO}" ]; then
-                echo >> "${l_env_file}"
-                echo "The debug option info:" >> "${l_env_file}"
-                echo "${G_DEBUG_INFO}" >> "${l_env_file}"
-                echo >> "${l_env_file}"
-                echo "------------------------------------------------------------------------ " >> "${l_env_file}"
+            echo >> "${l_env_file}"
+            echo "The debug option info:" >> "${l_env_file}"
+            echo "${G_DEBUG_INFO}" >> "${l_env_file}"
+            echo >> "${l_env_file}"
+            echo "------------------------------------------------------------------------ " >> "${l_env_file}"
         fi
 
-	tar -czf $G_HOTPATCH_TAR ${G_PREFIX}_${G_HOTPATCH_ID}
+        tar -czf $G_HOTPATCH_TAR ${G_PREFIX}_${G_HOTPATCH_ID}
         mv ${G_HOTPATCH_TAR} ${G_HOTPATCH_DIR}
-	cd - &>/dev/null
+        cd - &>/dev/null
         if [ $? -ne 0 ];then
             echo "error: move ${G_HOTPATCH} to ${G_KSPLICE_HOTPATCH} failed"
             return 1            
@@ -682,43 +685,43 @@ function fn_main()
         fn_do_clean
         return 1
     fi    
-    
+
     fn_do_clean 
 
     return 0
-    
+
 }
 
 function fn_prepare()
 {
-	kerver=`uname -r`
-	kerver=${kerver%.x86_64}
-	kerver=${kerver%.aarch64}
-	echo kernel version:$kerver
-	if [ ! -L kernel-source ];then
-		if [ -d /arm/arm_kernel ];then
-			ln -s /arm/arm_kernel/linux-$kerver kernel-source
-		else
-			ln -s /usr/src/kernels/linux-$kerver kernel-source
-			cp /lib/modules/`uname -r`/build/Makefile /usr/src/kernels/linux-$kerver 
-		fi
-	fi
-	if [ ! -L .config ];then
-		if [ -d /arm/arm_kernel ];then
-			ln -s /arm/arm_kernel/linux-$kerver/.config .config
-		else
-			ln -s /usr/src/kernels/linux-$kerver/.config  .config
-			cp /lib/modules/`uname -r`/build/.config /usr/src/kernels/linux-$kerver 
-		fi
-	fi
-	rm -rf $G_KPATCH_FLAGS
-	touch $G_KPATCH_FLAGS
+    kerver=`uname -r`
+    kerver=${kerver%.x86_64}
+    kerver=${kerver%.aarch64}
+    echo kernel version:$kerver
+    if [ ! -L kernel-source ];then
+        if [ -d /arm/arm_kernel ];then
+            ln -s /arm/arm_kernel/linux-$kerver kernel-source
+        else
+            ln -s /usr/src/kernels/linux-$kerver kernel-source
+            cp /lib/modules/`uname -r`/build/Makefile /usr/src/kernels/linux-$kerver 
+        fi
+    fi
+    if [ ! -L .config ];then
+        if [ -d /arm/arm_kernel ];then
+            ln -s /arm/arm_kernel/linux-$kerver/.config .config
+        else
+            ln -s /usr/src/kernels/linux-$kerver/.config  .config
+            cp /lib/modules/`uname -r`/build/.config /usr/src/kernels/linux-$kerver 
+        fi
+    fi
+    rm -rf $G_KPATCH_FLAGS
+    touch $G_KPATCH_FLAGS
 }
 
 G_NUM=`pidof -x make_hotpatch | wc -w`
 if [ $G_NUM -gt 2 ];then
-        echo "[$0]someone is making, please try again later."
-        exit 1
+    echo "[$0]someone is making, please try again later."
+    exit 1
 fi
 
 fn_prepare

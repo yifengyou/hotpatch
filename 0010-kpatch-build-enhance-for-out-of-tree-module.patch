@@ -1,0 +1,133 @@
+From a8cf8f9bd90e0e7fde437a59715aa21622fad7b6 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Wed, 26 Feb 2020 06:44:06 -0500
+Subject: [PATCH 10/17] kpatch-build: enhance for out of tree module
+
+support set USERMODBUILDDIR to build patch for out
+of tree module.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/kpatch-build | 50 ++++++++++++++++++++++++++++++++-------
+ 1 file changed, 42 insertions(+), 8 deletions(-)
+
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index 894f0ab..4e38412 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -419,7 +419,11 @@ filter_parent_obj()
+   local dir="${1}"
+   local file="${2}"
+ 
+-  grep -v "\.mod\.cmd$" | grep -Fv "${dir}/.${file}.cmd"
++  grep -v "\.mod\.cmd$" | grep -Fv "${dir}/.${file}.cmd" |  while read input; do
++    if [ "$(readlink -f $input)" != "$(readlink -f ${dir}/.${file}.cmd)" ];then
++        echo $input;
++    fi
++  done
+ }
+ 
+ find_parent_obj() {
+@@ -441,6 +445,11 @@ find_parent_obj() {
+ 			num="$(find . -name ".*.cmd" -print0 | xargs -0 grep -lw "$grepname" | filter_parent_obj "${pdir}" "${file}" | wc -l)"
+ 			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
+ 		fi
++		if [[ "$num" -eq 0 ]]; then
++			parent="$(find $USERMODBUILDDIR -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fv "$pdir/.${file}.cmd" | head -n1)"
++			num="$(find $USERMODBUILDDIR -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fvc "$pdir/.${file}.cmd")"
++			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
++		fi
+ 	else
+ 		parent="$(grep -lw "$grepname" "$dir"/.*.cmd | filter_parent_obj "${dir}" "${file}" | head -n1)"
+ 		num="$(grep -lw "$grepname" "$dir"/.*.cmd | filter_parent_obj "${dir}" "${file}" | wc -l)"
+@@ -646,6 +655,10 @@ if [[ -n "$SRCRPM" ]]; then
+ 	ARCHVERSION="${ARCHVERSION#alt-}"
+ fi
+ 
++if [[ -n "$USERMODBUILDDIR" ]]; then
++	OOT_MODULE="yes"
++fi
++
+ if [[ -n "$OOT_MODULE" ]] &&  [[ -z "$USERSRCDIR" ]]; then
+ 	warn "--oot-module requires --sourcedir"
+ 	exit 1
+@@ -663,7 +676,7 @@ if [[ -n "$USERSRCDIR" ]]; then
+ 	fi
+ 	SRCDIR="$USERSRCDIR"
+ 
+-	if [[ -z "$OOT_MODULE" ]]; then
++	if [[ -z "$OOT_MODULE" || "$OOT_MODULE" == "yes" ]]; then
+ 		[[ -z "$VMLINUX" ]] && VMLINUX="$SRCDIR"/vmlinux
+ 		[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
+ 
+@@ -685,7 +698,7 @@ if [[ "$ARCHVERSION" =~ - ]]; then
+ fi
+ [[ "$ARCHVERSION" =~ .el7a. ]] && ALT="-alt"
+ 
+-[[ -z "$TARGETS" ]] && TARGETS="vmlinux modules"
++[[ -z "$OOT_MODULE" ]] && [[ -z "$TARGETS" ]] && TARGETS="vmlinux modules"
+ 
+ # Don't check external file.
+ # shellcheck disable=SC1090
+@@ -889,7 +902,11 @@ echo "Building original source"
+ unset KPATCH_GCC_TEMPDIR
+ # $TARGETS used as list, no quotes.
+ # shellcheck disable=SC2086
+-CROSS_COMPILE="$TOOLSDIR/kpatch-gcc $ARCH_COMPILE" make "-j$CPUS" $TARGETS 2>&1 | logger || die
++if [[ -z "$USERMODBUILDDIR" ]]; then
++	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc $ARCH_COMPILE" make "-j$CPUS" $TARGETS 2>&1 | logger || die
++else
++	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc $ARCH_COMPILE" make -C "$USERMODBUILDDIR" M="$USERMODBUILDDIR" "-j$CPUS" $USERMODFLAGS $TARGETS 2>&1 | logger || die
++fi
+ 
+ echo "Building patched source"
+ apply_patches
+@@ -900,9 +917,15 @@ KPATCH_GCC_SRCDIR="$SRCDIR"
+ export KPATCH_GCC_SRCDIR
+ # $TARGETS used as list, no quotes.
+ # shellcheck disable=SC2086
+-CROSS_COMPILE="$TOOLSDIR/kpatch-gcc $ARCH_COMPILE" \
+-	KBUILD_MODPOST_WARN=1 \
+-	make "-j$CPUS" $TARGETS 2>&1 | logger || die
++if [[ -z "$USERMODBUILDDIR" ]]; then
++	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc $ARCH_COMPILE" \
++		KBUILD_MODPOST_WARN=1 \
++		make "-j$CPUS" $TARGETS 2>&1 | logger || die
++else
++	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc $ARCH_COMPILE" \
++		KBUILD_MODPOST_WARN=1 \
++		make -C "$USERMODBUILDDIR" M="$USERMODBUILDDIR" "-j$CPUS" $USERMODFLAGS $TARGETS 2>&1 | logger || die
++fi
+ 
+ # source.c:(.section+0xFF): undefined reference to `symbol'
+ grep "undefined reference" "$LOGFILE" | sed -r "s/^.*\`(.*)'$/\\1/" \
+@@ -922,7 +945,11 @@ fi
+ for i in $(cat "$TEMPDIR/changed_objs")
+ do
+ 	mkdir -p "$TEMPDIR/patched/$(dirname "$i")" || die
+-	cp -f "$SRCDIR/$i" "$TEMPDIR/patched/$i" || die
++	if [ -z "$USERMODBUILDDIR" ];then
++		cp -f "$SRCDIR/$i" "$TEMPDIR/patched/$i" || die
++	else
++		cp -f "$i" "$TEMPDIR/patched/$i" || die
++	fi
+ done
+ 
+ echo "Extracting new and modified ELF sections"
+@@ -987,6 +1014,13 @@ for i in $FILES; do
+ 			KOBJFILE_PATH="${TEMPDIR}/module/$KOBJFILE"
+ 			SYMTAB="${KOBJFILE_PATH}.symtab"
+ 			SYMVERS_FILE="$SRCDIR/Module.symvers"
++
++			if [ "$OOT_MODULE" == "yes" ];then
++				BUILDDIR="/lib/modules/$ARCHVERSION/build/"
++				SYMVERS_FILE="$TEMPDIR/Module.symvers"
++				[[ -e $SRCDIR/Module.symvers ]] && cp "$SRCDIR/Module.symvers" "$SYMVERS_FILE"
++				awk '{ print $1 "\t" $2 "\t" $3 "\t" $4}' "${BUILDDIR}/Module.symvers" >> "$SYMVERS_FILE"
++			fi
+ 		fi
+ 
+ 		readelf -s --wide "$KOBJFILE_PATH" > "$SYMTAB"
+-- 
+2.18.1
+

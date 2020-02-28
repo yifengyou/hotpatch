@@ -1,0 +1,52 @@
+From c14444fc4049048abd445462676576cd8b043ea3 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Tue, 25 Feb 2020 23:40:37 -0500
+Subject: [PATCH 09/17] livepatch-patch-hook: don't active patch when insmod
+
+Don't active patch after loading the patch when
+DISABLE_AFTER_LOAD is set.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kmod/patch/livepatch-patch-hook.c | 2 ++
+ kpatch-build/kpatch-build         | 4 ++++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/kmod/patch/livepatch-patch-hook.c b/kmod/patch/livepatch-patch-hook.c
+index 613d037..163ae1d 100644
+--- a/kmod/patch/livepatch-patch-hook.c
++++ b/kmod/patch/livepatch-patch-hook.c
+@@ -455,6 +455,7 @@ static int __init patch_init(void)
+ 	}
+ #endif
+ 
++#if !defined(DISABLE_AFTER_LOAD)
+ 	ret = klp_enable_patch(lpatch);
+ 	if (ret) {
+ #ifndef HAVE_SIMPLE_ENABLE
+@@ -463,6 +464,7 @@ static int __init patch_init(void)
+ 		patch_free_livepatch(lpatch);
+ 		return ret;
+ 	}
++#endif
+ 
+ 	return 0;
+ out:
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index 17a5e11..894f0ab 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -1053,6 +1053,10 @@ if [[ -n "$KLP_SUPPORT_LOADHOOKS" ]];then
+ 	export KCPPFLAGS="-DHAVE_LOADHOOKS $KCPPFLAGS"
+ fi
+ 
++if [[ -n "$DISABLE_AFTER_LOAD" ]];then
++    export KCPPFLAGS="-DDISABLE_AFTER_LOAD $KCPPFLAGS"
++fi
++
+ echo "Building patch module: $MODNAME.ko"
+ 
+ if [[ -z "$USERSRCDIR" ]] && [[ "$DISTRO" = ubuntu ]]; then
+-- 
+2.18.1
+

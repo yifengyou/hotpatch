@@ -1,0 +1,67 @@
+From b63c72375420cb098a81167c48d822d596e770a9 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Wed, 26 Feb 2020 20:43:34 -0500
+Subject: [PATCH 14/17] livepatch-patch-hook: support force enable/disable
+
+we use force to indicate function which bypass stack check
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kmod/patch/livepatch-patch-hook.c | 18 ++++++++++++++++++
+ kpatch-build/kpatch-build         |  4 ++++
+ 2 files changed, 22 insertions(+)
+
+diff --git a/kmod/patch/livepatch-patch-hook.c b/kmod/patch/livepatch-patch-hook.c
+index 163ae1d..7e848a7 100644
+--- a/kmod/patch/livepatch-patch-hook.c
++++ b/kmod/patch/livepatch-patch-hook.c
+@@ -238,6 +238,17 @@ extern struct kpatch_pre_patch_callback __kpatch_callbacks_pre_patch[], __kpatch
+ extern struct kpatch_post_patch_callback __kpatch_callbacks_post_patch[], __kpatch_callbacks_post_patch_end[];
+ extern struct kpatch_pre_unpatch_callback __kpatch_callbacks_pre_unpatch[], __kpatch_callbacks_pre_unpatch_end[];
+ extern struct kpatch_post_unpatch_callback __kpatch_callbacks_post_unpatch[], __kpatch_callbacks_post_unpatch_end[];
++extern unsigned long __kpatch_force_funcs[], __kpatch_force_funcs_end[];
++
++static int patch_is_func_forced(unsigned long addr)
++{
++	unsigned long *a;
++	for (a = __kpatch_force_funcs; a < __kpatch_force_funcs_end; a++)
++		if (*a == addr)
++			return 1;
++	return 0;
++}
++
+ 
+ #ifdef HAVE_CALLBACKS
+ static int add_callbacks_to_patch_objects(void)
+@@ -403,6 +414,13 @@ static int __init patch_init(void)
+ 			lfunc = &lfuncs[j];
+ 			lfunc->old_name = func->kfunc->name;
+ 			lfunc->new_func = (void *)func->kfunc->new_addr;
++#if defined(__KLP_SUPPORT_FORCE__)
++#ifdef __ALL_FORCE__
++			lfunc->force = 1;
++#else
++			lfunc->force = patch_is_func_forced(func->kfunc->new_addr);
++#endif
++#endif
+ #ifdef HAVE_SYMPOS
+ 			lfunc->old_sympos = func->kfunc->sympos;
+ #else
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index 8bef7fb..57487b1 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -1079,6 +1079,10 @@ if "$KPATCH_MODULE"; then
+ 	export KCPPFLAGS="-D__KPATCH_MODULE__"
+ fi
+ 
++if [[ -n "$NO_STACK_CHECK" ]];then
++	export KCPPFLAGS="-D__ALL_FORCE__ $KCPPFLAGS"
++fi
++
+ if [[ -n "$KLP_SUPPORT_FORCE" ]];then
+ 	export KCPPFLAGS="-D__KLP_SUPPORT_FORCE__ $KCPPFLAGS"
+ fi
+-- 
+2.18.1
+

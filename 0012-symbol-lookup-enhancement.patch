@@ -1,0 +1,454 @@
+From 56ec8b76667fb6c7fbc018a8fe7a77f144232f3f Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Wed, 26 Feb 2020 22:03:55 -0500
+Subject: [PATCH 12/17] symbol lookup enhancement
+
+For symbols which have same name in one module or have
+length longger than KSYM_NAME_LEN(128 bytes). we add
+some work around to lookup another unique symbol and add
+relative offset to get the actual symbol. This patch
+depend on a kernel patch to deal with new relocation
+style.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kmod/patch/kpatch-patch.h          |   4 +
+ kpatch-build/create-diff-object.c  |  46 ++++++++++-
+ kpatch-build/create-klp-module.c   |  25 +++++-
+ kpatch-build/kpatch-build          |  12 +++
+ kpatch-build/kpatch-intermediate.h |   2 +
+ kpatch-build/lookup.c              | 123 ++++++++++++++++++++++++++++-
+ kpatch-build/lookup.h              |  13 +++
+ 7 files changed, 217 insertions(+), 8 deletions(-)
+
+diff --git a/kmod/patch/kpatch-patch.h b/kmod/patch/kpatch-patch.h
+index 917ea32..7cd6dae 100644
+--- a/kmod/patch/kpatch-patch.h
++++ b/kmod/patch/kpatch-patch.h
+@@ -30,6 +30,8 @@ struct kpatch_patch_func {
+ 	unsigned long sympos;
+ 	char *name;
+ 	char *objname;
++	char *ref_name;
++	long ref_offset;
+ };
+ 
+ struct kpatch_patch_dynrela {
+@@ -41,6 +43,8 @@ struct kpatch_patch_dynrela {
+ 	char *objname;
+ 	int external;
+ 	int addend;
++	char *ref_name;
++	long ref_offset;
+ };
+ 
+ struct kpatch_pre_patch_callback {
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 190753a..55db18c 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -2734,6 +2734,28 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
+ 			funcs[index].old_size = result.size;
+ 			funcs[index].new_size = sym->sym.st_size;
+ 			funcs[index].sympos = result.pos;
++			if (lookup_is_duplicate_symbol(table, sym->name, objname, result.pos)) {
++				struct lookup_refsym refsym;
++				long offset;
++
++				if (lookup_ref_symbol_offset(table, sym->name, &refsym, objname, &offset))
++					ERROR("unresolvable ambiguity on symbol %s\n", sym->name);
++
++				funcs[index].ref_offset = offset;
++
++				/*
++				 * Add a relocation that will populate
++				 * the funcs[index].ref_name field.
++				 */
++				ALLOC_LINK(rela, &relasec->relas);
++				rela->sym = strsym;
++				rela->type = absolute_rela_type;
++				rela->addend = offset_of_string(&kelf->strings, refsym.name);
++				rela->offset = index * sizeof(*funcs) +
++					offsetof(struct kpatch_patch_func, ref_name);
++
++			}
++
+ 
+ 			/*
+ 			 * Add a relocation that will populate
+@@ -2753,7 +2775,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
+ 			ALLOC_LINK(rela, &relasec->relas);
+ 			rela->sym = strsym;
+ 			rela->type = absolute_rela_type;
+-			rela->addend = offset_of_string(&kelf->strings, sym->name);
++			rela->addend = offset_of_string(&kelf->strings, strndup(sym->name, KSYM_NAME_LEN-1));
+ 			rela->offset = index * sizeof(*funcs) +
+ 			               offsetof(struct kpatch_patch_func, name);
+ 
+@@ -2872,6 +2894,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+ 	struct lookup_result result;
+ 	char *sym_objname;
+ 	int ret, vmlinux, external;
++	long ref_offset;
+ 
+ 	vmlinux = !strcmp(objname, "vmlinux");
+ 
+@@ -3080,12 +3103,28 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+ 			log_debug("lookup for %s @ 0x%016lx len %lu\n",
+ 			          rela->sym->name, result.value, result.size);
+ 
++			ref_offset = 0;
+ 			/* Fill in ksyms[index] */
+ 			if (vmlinux)
+ 				ksyms[index].src = result.value;
+-			else
++			else {
+ 				/* for modules, src is discovered at runtime */
+ 				ksyms[index].src = 0;
++				if (lookup_is_duplicate_symbol(table, rela->sym->name, objname, result.pos)) {
++					struct lookup_refsym refsym;
++
++					if (lookup_ref_symbol_offset(table, rela->sym->name, &refsym, objname, &ref_offset))
++						ERROR("unresolvable ambiguity on symbol %s\n", rela->sym->name);
++
++					/* add rela to fill in ref_name field */
++					ALLOC_LINK(rela2, &krela_sec->rela->relas);
++					rela2->sym = strsym;
++					rela2->type = absolute_rela_type;
++					rela2->addend = offset_of_string(&kelf->strings, refsym.name);
++					rela2->offset = index * sizeof(*krelas) +
++						offsetof(struct kpatch_relocation, ref_name);
++				}
++			}
+ 			ksyms[index].pos = result.pos;
+ 			ksyms[index].type = rela->sym->type;
+ 			ksyms[index].bind = rela->sym->bind;
+@@ -3094,7 +3133,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+ 			ALLOC_LINK(rela2, &ksym_sec->rela->relas);
+ 			rela2->sym = strsym;
+ 			rela2->type = absolute_rela_type;
+-			rela2->addend = offset_of_string(&kelf->strings, rela->sym->name);
++			rela2->addend = offset_of_string(&kelf->strings, strndup(rela->sym->name, KSYM_NAME_LEN-1));
+ 			rela2->offset = index * sizeof(*ksyms) + \
+ 					offsetof(struct kpatch_symbol, name);
+ 
+@@ -3113,6 +3152,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+ 			krelas[index].addend = rela->addend;
+ 			krelas[index].type = rela->type;
+ 			krelas[index].external = external;
++			krelas[index].ref_offset = ref_offset;
+ 
+ 			/* add rela to fill in krelas[index].dest field */
+ 			ALLOC_LINK(rela2, &krela_sec->rela->relas);
+diff --git a/kpatch-build/create-klp-module.c b/kpatch-build/create-klp-module.c
+index d995525..5073a04 100644
+--- a/kpatch-build/create-klp-module.c
++++ b/kpatch-build/create-klp-module.c
+@@ -38,7 +38,9 @@ enum loglevel loglevel = NORMAL;
+  */
+ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
+ 						  struct section *ksymsec,
+-						  char *strings, int offset)
++						  char *strings, int offset,
++						  char *ref_name,
++						  long ref_offset)
+ {
+ 	struct kpatch_symbol *ksyms, *ksym;
+ 	struct symbol *sym;
+@@ -67,9 +69,14 @@ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
+ 
+ 	objname = strings + rela->addend;
+ 
+-	snprintf(pos, 32, "%lu", ksym->pos);
+ 	/* .klp.sym.objname.name,pos */
+-	snprintf(buf, 256, KLP_SYM_PREFIX "%s.%s,%s", objname, name, pos);
++	if (!ref_name) {
++		snprintf(pos, 32, "%lu", ksym->pos);
++		snprintf(buf, 256, KLP_SYM_PREFIX "%s.%s,%s", objname, name, pos);
++	} else {
++		snprintf(pos, 32, "%ld", ref_offset);
++		snprintf(buf, 256, KLP_SYM_PREFIX "%s-%s,%s", objname, ref_name, pos);
++	}
+ 
+ 	/* Look for an already allocated symbol */
+ 	list_for_each_entry(sym, &kelf->symbols, list) {
+@@ -176,6 +183,7 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
+ 	struct rela *rela;
+ 	char *objname;
+ 	int nr, index, offset, dest_off;
++	char *ref_name;
+ 
+ 	krelas = krelasec->data->d_buf;
+ 	nr = krelasec->data->d_size / sizeof(*krelas);
+@@ -200,6 +208,15 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
+ 
+ 		objname = strings + rela->addend;
+ 
++		/* Get the unique ref_name */
++		rela = find_rela_by_offset(krelasec->rela,
++					   offset + offsetof(struct kpatch_relocation, ref_name));
++		if (!rela)
++			ref_name = NULL;
++		else {
++			ref_name = strings + rela->addend;
++		}
++
+ 		/* Get the .kpatch.symbol entry for the rela src */
+ 		rela = find_rela_by_offset(krelasec->rela,
+ 					   offset + offsetof(struct kpatch_relocation, ksym));
+@@ -207,7 +224,7 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
+ 			ERROR("find_rela_by_offset");
+ 
+ 		/* Create (or find) a klp symbol from the rela src entry */
+-		sym = find_or_add_ksym_to_symbols(kelf, ksymsec, strings, rela->addend);
++		sym = find_or_add_ksym_to_symbols(kelf, ksymsec, strings, rela->addend, ref_name, krelas[index].ref_offset);
+ 		if (!sym)
+ 			ERROR("error finding or adding ksym to symtab");
+ 
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index 4896136..8bef7fb 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -1015,6 +1015,18 @@ for i in $FILES; do
+ 			SYMTAB="${KOBJFILE_PATH}.symtab"
+ 			SYMVERS_FILE="$SRCDIR/Module.symvers"
+ 
++			unset KCFLAGS
++			remove_patches
++			cd "$SRCDIR" || die
++			if [ -z "$USERMODBUILDDIR" ];then
++				CROSS_COMPILE="$ARCH_COMPILE" make "-j$CPUS" ${KOBJFILE} 2>&1 | logger || die
++			else
++				CROSS_COMPILE="$ARCH_COMPILE" make -C "$USERMODBUILDDIR" M="$USERMODBUILDDIR" "-j$CPUS" $USERMODFLAGS $TARGETS 2>&1 | logger || die
++			fi
++			cp ${KOBJFILE} ${KOBJFILE_PATH}
++			apply_patches
++			cd "$TEMPDIR" || die
++
+ 			if [ "$OOT_MODULE" == "yes" ];then
+ 				BUILDDIR="/lib/modules/$ARCHVERSION/build/"
+ 				SYMVERS_FILE="$TEMPDIR/Module.symvers"
+diff --git a/kpatch-build/kpatch-intermediate.h b/kpatch-build/kpatch-intermediate.h
+index 3dea775..59deed0 100644
+--- a/kpatch-build/kpatch-intermediate.h
++++ b/kpatch-build/kpatch-intermediate.h
+@@ -39,6 +39,8 @@ struct kpatch_relocation {
+ 	int external;
+ 	char *objname; /* object to which this rela applies to */
+ 	struct kpatch_symbol *ksym;
++	char *ref_name;
++	long ref_offset;
+ };
+ 
+ struct kpatch_arch {
+diff --git a/kpatch-build/lookup.c b/kpatch-build/lookup.c
+index 4e2fcb9..190a7d8 100644
+--- a/kpatch-build/lookup.c
++++ b/kpatch-build/lookup.c
+@@ -44,6 +44,7 @@ struct object_symbol {
+ 	unsigned long size;
+ 	char *name;
+ 	int type, bind;
++	int sec_index;
+ };
+ 
+ struct export_symbol {
+@@ -248,6 +249,7 @@ static void symtab_read(struct lookup_table *table, char *path)
+ 
+ 		table->obj_syms[i].value = value;
+ 		table->obj_syms[i].size = strtoul(size, NULL, 0);
++		table->obj_syms[i].sec_index = atoi(ndx);
+ 
+ 		if (!strcmp(bind, "LOCAL")) {
+ 			table->obj_syms[i].bind = STB_LOCAL;
+@@ -398,6 +400,15 @@ int lookup_local_symbol(struct lookup_table *table, char *name,
+ 	for_each_obj_symbol(i, sym, table) {
+ 		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name))
+ 			pos++;
++		else {
++			/* symbol name longer than KSYM_NAME_LEN will be truncated
++			 * by kernel, so we can not find it using its original
++			 * name. we need to add pos for symbols which have same
++			 * KSYM_NAME_LEN-1 long prefix.*/
++			if (strlen(name) >= KSYM_NAME_LEN-1 &&
++					!strncmp(sym->name, name, KSYM_NAME_LEN-1))
++				pos++;
++		}
+ 
+ 		if (table->local_syms == sym) {
+ 			in_file = 1;
+@@ -429,16 +440,25 @@ int lookup_global_symbol(struct lookup_table *table, char *name,
+                          struct lookup_result *result)
+ {
+ 	struct object_symbol *sym;
++	unsigned long pos = 0;
+ 	int i;
+ 
+ 	memset(result, 0, sizeof(*result));
+ 	for_each_obj_symbol(i, sym, table) {
++		/* symbol name longer than KSYM_NAME_LEN will be truncated
++		 * by kernel, so we can not find it using its original
++		 * name. we need to add pos for symbols which have same
++		 * KSYM_NAME_LEN-1 long prefix.*/
++		if (strlen(name) >= KSYM_NAME_LEN-1 &&
++				!strncmp(sym->name, name, KSYM_NAME_LEN-1))
++			pos++;
++
+ 		if ((sym->bind == STB_GLOBAL || sym->bind == STB_WEAK
+ 			|| sym->bind == STB_GNU_UNIQUE) &&
+ 		    !strcmp(sym->name, name)) {
+ 			result->value = sym->value;
+ 			result->size = sym->size;
+-			result->pos = 0; /* always 0 for global symbols */
++			result->pos = pos;
+ 			return 0;
+ 		}
+ 	}
+@@ -485,6 +505,107 @@ char *lookup_exported_symbol_objname(struct lookup_table *table, char *name)
+ 	return NULL;
+  }
+ 
++int lookup_is_duplicate_symbol(struct lookup_table *table, char *name,
++		char *objname, unsigned long pos)
++{
++	struct object_symbol *sym;
++	int i, count = 0;
++	char posstr[32], buf[256];
++
++	for_each_obj_symbol(i, sym, table)
++		if (!strcmp(sym->name, name)) {
++			count++;
++			if (count > 1)
++				return 1;
++		}
++
++	/* symbol name longer than KSYM_NAME_LEN will be truncated
++	 * by kernel, so we can not find it using its original
++	 * name. Here, we consider these long name symbol as duplicated
++	 * symbols. since create_klp_module will create symbol name 
++	 * format like .klp.sym.objname.symbol,pos, so we consider name
++	 * length longer than KSYM_NAME_LEN-1 bytes as duplicated symbol*/
++	snprintf(posstr, 32, "%lu", pos);
++	snprintf(buf, 256, KLP_SYM_PREFIX "%s.%s,%s", objname, name, posstr);
++	if (strlen(buf) >= KSYM_NAME_LEN-1)
++		return 1;
++
++	return 0;
++}
++
++struct object_symbol *lookup_find_symbol_by_name(struct lookup_table *table, char *name)
++{
++	struct object_symbol *sym;
++	unsigned long pos = 0;
++	int i, match = 0, in_file = 0;
++
++	if (!table->local_syms)
++		return NULL;
++
++	for_each_obj_symbol(i, sym, table) {
++		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name))
++			pos++;
++
++		if (table->local_syms == sym) {
++			in_file = 1;
++			continue;
++		}
++
++		if (!in_file)
++			continue;
++
++		if (sym->type == STT_FILE)
++			break;
++
++		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name)) {
++			match = 1;
++			break;
++		}
++	}
++
++	if (!match) {
++		for_each_obj_symbol(i, sym, table) {
++			if ((sym->bind == STB_GLOBAL || sym->bind == STB_WEAK) &&
++					!strcmp(sym->name, name)) {
++				return sym;
++			}
++		}
++		return NULL;
++	}
++
++	return sym;
++}
++
++int lookup_ref_symbol_offset(struct lookup_table *table, char *name,
++		struct lookup_refsym *refsym,
++		char *objname, long *offset)
++{
++	struct object_symbol *orig_sym, *sym;
++	int i;
++
++	orig_sym = lookup_find_symbol_by_name(table, name);
++	if (!orig_sym)
++		ERROR("lookup_ref_symbol_offset");
++	memset(refsym, 0, sizeof(*refsym));
++
++	/*find a unique symbol in the same section first*/
++	for_each_obj_symbol(i, sym, table) {
++		if (!strcmp(sym->name, name) || sym->type == STT_FILE ||
++				sym->sec_index != orig_sym->sec_index ||
++				strchr(sym->name, '.'))
++			continue;
++
++		if (!lookup_is_duplicate_symbol(table, sym->name, objname, 1)) {
++			refsym->name = sym->name;
++			refsym->value = sym->value;
++			*offset = (long)orig_sym->value - (long)sym->value;
++			return 0;
++		}
++	}
++
++	return 1;
++}
++
+ #if 0 /* for local testing */
+ static void find_this(struct lookup_table *table, char *sym, char *hint)
+ {
+diff --git a/kpatch-build/lookup.h b/kpatch-build/lookup.h
+index 420d0f0..fed3fe9 100644
+--- a/kpatch-build/lookup.h
++++ b/kpatch-build/lookup.h
+@@ -1,6 +1,9 @@
+ #ifndef _LOOKUP_H_
+ #define _LOOKUP_H_
+ 
++#include "kpatch-elf.h"
++#define KSYM_NAME_LEN 128
++
+ struct lookup_table;
+ 
+ struct lookup_result {
+@@ -14,6 +17,11 @@ struct sym_compare_type {
+ 	int type;
+ };
+ 
++struct lookup_refsym {
++	char *name;
++	unsigned long value;
++};
++
+ struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
+ 				 char *hint, struct sym_compare_type *locals);
+ void lookup_close(struct lookup_table *table);
+@@ -23,5 +31,10 @@ int lookup_global_symbol(struct lookup_table *table, char *name,
+                          struct lookup_result *result);
+ int lookup_is_exported_symbol(struct lookup_table *table, char *name);
+ char *lookup_exported_symbol_objname(struct lookup_table *table, char *name);
++int lookup_is_duplicate_symbol(struct lookup_table *table, char *name,
++		char *objname, unsigned long pos);
++int lookup_ref_symbol_offset(struct lookup_table *table, char *name,
++                         struct lookup_refsym *refsym, char *objname,
++			 long *offset);
+ 
+ #endif /* _LOOKUP_H_ */
+-- 
+2.18.1
+

@@ -1,0 +1,171 @@
+From 05051ffc7abcb953fb1ec51b0826b41f160ce191 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Wed, 26 Feb 2020 20:28:13 -0500
+Subject: [PATCH 13/17] Add running kernel symbol table to help symbol lookup
+
+For some duplicate symbols whose section have no other
+symbols, we need running kernel symbol table to help
+symbol lookup.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/create-diff-object.c |  7 ++-
+ kpatch-build/lookup.c             | 73 ++++++++++++++++++++++++++++++-
+ kpatch-build/lookup.h             |  3 +-
+ 3 files changed, 80 insertions(+), 3 deletions(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 55db18c..4589ba4 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -3564,6 +3564,7 @@ int main(int argc, char *argv[])
+ 	struct sym_compare_type *base_locals, *sym_comp;
+ 	char *no_profiling_calls = NULL;
+ 	char *gcc_add_option = NULL, *mlongcall = NULL;
++	char *kallsyms;
+ 
+ 	arguments.debug = 0;
+ 	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
+@@ -3677,8 +3678,12 @@ int main(int argc, char *argv[])
+ 	 */
+ 	kpatch_elf_teardown(kelf_patched);
+ 
++	kallsyms = getenv("KALLSYMS");
++	if (kallsyms)
++		log_debug("kallsyms file:%s\n", kallsyms);
++
+ 	/* create symbol lookup table */
+-	lookup = lookup_open(parent_symtab, mod_symvers, hint, base_locals);
++	lookup = lookup_open(parent_symtab, mod_symvers, hint, base_locals, kallsyms);
+ 	for (sym_comp = base_locals; sym_comp && sym_comp->name; sym_comp++) {
+ 		free(sym_comp->name);
+ 	}
+diff --git a/kpatch-build/lookup.c b/kpatch-build/lookup.c
+index 190a7d8..8f53567 100644
+--- a/kpatch-build/lookup.c
++++ b/kpatch-build/lookup.c
+@@ -45,6 +45,7 @@ struct object_symbol {
+ 	char *name;
+ 	int type, bind;
+ 	int sec_index;
++	unsigned long kaddr;
+ };
+ 
+ struct export_symbol {
+@@ -284,6 +285,56 @@ static void symtab_read(struct lookup_table *table, char *path)
+ 	fclose(file);
+ }
+ 
++static void ksymtab_read(struct lookup_table *table, char *path)
++{
++	FILE *file;
++	struct object_symbol *sym, *sym1, *sym2;
++	unsigned long value;
++	int i, j, idx;
++	char line[256], name[256], type[256], mod[256];
++	idx =  0;
++
++	if ((file = fopen(path, "r")) == NULL)
++		ERROR("fopen");
++
++	while (fgets(line, 256, file)) {
++		if (sscanf(line, "%lx %s %s [%s]\n",
++			   &value, type, name, mod) != 4)
++			continue;
++
++		if (name[0] == '$')
++			continue;
++
++		i = idx;
++		for_each_obj_symbol_continue(i, sym, table) {
++			if (!strncmp(sym->name, name, KSYM_NAME_LEN-1)) {
++				sym->kaddr = value;
++				idx = i + 1;
++				break;
++			}
++		}
++	}
++
++	for_each_obj_symbol(i, sym1, table) {
++		if (sym1->kaddr == 0)
++			continue;
++		for_each_obj_symbol(j, sym2, table) {
++			if (sym2->kaddr == 0)
++				continue;
++			if (sym1 == sym2)
++				continue;
++			if (sym1->sec_index != sym2->sec_index)
++				continue;
++			if ((long)sym1->value - (long)sym2->value ==
++				(long)sym1->kaddr - (long)sym2->kaddr)
++				continue;
++
++			ERROR("base mismatch(symbol offset)");
++		}
++	}
++	fclose(file);
++}
++
+ /*
+  * Symvers file format is the following for kernels v5.3 and newer:
+  * <CRC>	<Symbol>	<Namespace>	<Module>	<Export Type>
+@@ -352,7 +403,8 @@ static void symvers_read(struct lookup_table *table, char *path)
+ }
+ 
+ struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
+-				 char *hint, struct sym_compare_type *locals)
++				 char *hint, struct sym_compare_type *locals,
++				 char *kallsyms)
+ {
+ 	struct lookup_table *table;
+ 
+@@ -363,6 +415,8 @@ struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
+ 
+ 	symtab_read(table, symtab_path);
+ 	symvers_read(table, symvers_path);
++	if (kallsyms)
++		ksymtab_read(table, kallsyms);
+ 	find_local_syms(table, hint, locals);
+ 
+ 	return table;
+@@ -603,6 +657,23 @@ int lookup_ref_symbol_offset(struct lookup_table *table, char *name,
+ 		}
+ 	}
+ 
++	if (orig_sym->kaddr == 0)
++		return 1;
++
++	/*find a unique symbol has kaddr*/
++	for_each_obj_symbol(i, sym, table) {
++		if (!strcmp(sym->name, name) || sym->type == STT_FILE ||
++				sym->kaddr == 0 || strchr(sym->name, '.'))
++			continue;
++
++		if (!lookup_is_duplicate_symbol(table, sym->name, objname, 1)) {
++			refsym->name = sym->name;
++			refsym->value = 0;
++			*offset = (long)orig_sym->kaddr - (long)sym->kaddr;
++			return 0;
++		}
++	}
++
+ 	return 1;
+ }
+ 
+diff --git a/kpatch-build/lookup.h b/kpatch-build/lookup.h
+index fed3fe9..00b6ccc 100644
+--- a/kpatch-build/lookup.h
++++ b/kpatch-build/lookup.h
+@@ -23,7 +23,8 @@ struct lookup_refsym {
+ };
+ 
+ struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
+-				 char *hint, struct sym_compare_type *locals);
++				 char *hint, struct sym_compare_type *locals,
++				 char *kallsyms);
+ void lookup_close(struct lookup_table *table);
+ int lookup_local_symbol(struct lookup_table *table, char *name,
+                         struct lookup_result *result);
+-- 
+2.18.1
+

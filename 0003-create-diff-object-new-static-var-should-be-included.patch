@@ -1,8 +1,7 @@
-From fc6b9c5b1b3eb5d59186fe35cc90d3c06b07c537 Mon Sep 17 00:00:00 2001
+From 3af07fd0f178a4c6e2ae68207c3fedfd10672e65 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
-Date: Fri, 2 Nov 2018 17:24:36 +0000
-Subject: [PATCH 1004/1015] create-diff-object: new static var should be
- included
+Date: Tue, 25 Feb 2020 22:44:50 -0500
+Subject: [PATCH 03/17] create-diff-object: new static var should be included
 
 Before this patch, only global variables(no referenced) will be
 included by kpatch-build. But some macros put some static varibles
@@ -15,14 +14,14 @@ cause a problem even the new static variables are in unbundled section.
 Signed-off-by: Zhou Chengming <zhouchengming1@huawei.com>
 Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
- kpatch-build/create-diff-object.c |   15 +++++++++++++++
- 1 files changed, 15 insertions(+), 0 deletions(-)
+ kpatch-build/create-diff-object.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index d242d01..6e23295 100644
+index 58789f1..93570df 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -1536,6 +1536,20 @@ static void kpatch_include_force_elements(struct kpatch_elf *kelf)
+@@ -1689,6 +1689,20 @@ static void kpatch_include_force_elements(struct kpatch_elf *kelf)
  			sym->include = 0;
  }
  
@@ -32,8 +31,8 @@ index d242d01..6e23295 100644
 +
 +        list_for_each_entry(sym, &kelf->symbols, list) {
 +                if (sym->status == NEW &&
-+                        sym->type == STT_OBJECT &&
-+                        sym->bind == STB_LOCAL)
++                        sym->bind == STB_LOCAL &&
++                        (sym->type == STT_OBJECT || (sym->type == STT_NOTYPE && sym->name[0] != '$')))
 +                        kpatch_include_symbol(sym);
 +        }
 +
@@ -43,14 +42,14 @@ index d242d01..6e23295 100644
  static int kpatch_include_new_globals(struct kpatch_elf *kelf)
  {
  	struct symbol *sym;
-@@ -3211,6 +3225,7 @@ int main(int argc, char *argv[])
+@@ -3554,6 +3568,7 @@ int main(int argc, char *argv[])
  	callbacks_exist = kpatch_include_callback_elements(kelf_patched);
  	kpatch_include_force_elements(kelf_patched);
  	new_globals_exist = kpatch_include_new_globals(kelf_patched);
-+        kpatch_include_new_static_var(kelf_patched);
++    kpatch_include_new_static_var(kelf_patched);
  
- 	kpatch_print_changes(kelf_patched);
- 	kpatch_dump_kelf(kelf_patched);
+ 	kpatch_process_special_sections(kelf_patched);
+ 
 -- 
-1.7.5.4
+2.18.1
 

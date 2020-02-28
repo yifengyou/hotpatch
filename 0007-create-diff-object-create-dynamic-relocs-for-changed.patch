@@ -1,8 +1,8 @@
-From 78a13a6091a0d4b1a45fe8f378892a64dece7202 Mon Sep 17 00:00:00 2001
+From a743990bb6d871fb8cd5ffe6f78ffaa8d5ee7c0a Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Fri, 2 Nov 2018 17:25:38 +0000
-Subject: [PATCH 1012/1015] create-diff-object: create dynamic relocs for
- changed functions in this object
+Subject: [PATCH 07/17] create-diff-object: create dynamic relocs for changed
+ functions in this object
 
 Currently, we only create dynamic relocs for changed functions of
 other objects, but not this object. It will cause a problem like:
@@ -22,14 +22,14 @@ Signed-off-by: Zhou Chengming <zhouchengming1@huawei.com>
 Signed-off-by: Li Bin <huawei.libin@huawei.com>
 Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
- kpatch-build/create-diff-object.c |   20 ++++++++++++++++----
- 1 files changed, 16 insertions(+), 4 deletions(-)
+ kpatch-build/create-diff-object.c | 20 ++++++++++++++++----
+ 1 file changed, 16 insertions(+), 4 deletions(-)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index b8d3bb4..4fb27da 100644
+index 18ed1f7..5cdb97b 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -2684,6 +2684,14 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -2883,6 +2883,14 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  			 */
  			if (may_need_dynrela(rela))
  				toc_rela(rela)->need_dynrela = 1;
@@ -44,7 +44,7 @@ index b8d3bb4..4fb27da 100644
  		}
  	}
  
-@@ -2765,10 +2773,14 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -2965,10 +2973,14 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  				/* An unchanged local symbol */
  				ret = lookup_local_symbol(table,
  					rela->sym->name, &result);
@@ -64,5 +64,5 @@ index b8d3bb4..4fb27da 100644
  			else if (vmlinux) {
  				/*
 -- 
-1.7.5.4
+2.18.1
 
