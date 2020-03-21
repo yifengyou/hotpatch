@@ -1,0 +1,40 @@
+From 65a3ae0c692a22d097f7257ae88bbe6bc2b73de8 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Thu, 12 Mar 2020 06:56:21 -0400
+Subject: [PATCH] kpatch-build: add compile flag -fno-reorder-functions
+
+Sometimes function foo with static variables can be put in
+.text.foo section in original binary and be put in
+.text.unlikely.foo section in patched binary. This will result
+in "reference to static local variable xxx in foo was removed"
+problem because the .text.foo section can not be correlated
+to .text.unlikely.foo section by create-diff-object.
+
+gcc just put the function in .text.unlikely.xxx section,the
+symbol name doesn't change which is different with other
+optimization such as ".constprop/.isra/.part". So disable the
+optimization with -fno-reorder-functions just make sure the
+function is placed in .text.xxx section, kernel can still find
+the symbol name to patch or relocate.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/kpatch-build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index de448dc..ad7ab71 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -887,7 +887,7 @@ if [[ "$ARCH" = "ppc64le" ]]; then
+ 	ARCH_KCFLAGS="-mcmodel=large -fplugin=$PLUGINDIR/ppc64le-plugin.so"
+ fi
+ 
+-export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections \
++export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections -fno-reorder-functions\
+ 		$ARCH_KCFLAGS $DEBUG_KCFLAGS ${GCC_ADD_OPTION}"
+ 
+ echo "Reading special section data"
+-- 
+2.18.1
+

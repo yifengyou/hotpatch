@@ -7,7 +7,7 @@ support GNU_UNIQUE type symbols.
 support .group section corelation.
 ignore compile warning for third party modules.
 
-Signed-off-by: Zhipeng Xie <root@localhost.localdomain>
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
  kpatch-build/create-diff-object.c | 62 ++++++++++++++++++++-----------
  kpatch-build/kpatch-build         |  2 +-

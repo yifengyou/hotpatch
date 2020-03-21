@@ -8,7 +8,7 @@ differ from .orc_unwind_ip
 
 Don't correlate .orc_unwind sections and symbols
 
-Signed-off-by: root <root@localhost.localdomain>
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
  kpatch-build/create-diff-object.c | 6 ++++++
  1 file changed, 6 insertions(+)
