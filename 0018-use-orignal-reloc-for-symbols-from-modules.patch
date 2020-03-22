@@ -1,0 +1,33 @@
+From 4d13c1b29b2172e6758d18b153f149e461c6d9c3 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Thu, 12 Mar 2020 05:10:55 -0400
+Subject: [PATCH] use orignal reloc for symbols from modules
+
+symbols exported in a patch will generate a symbol version with
+object module name in Module.symvers, but the symbol is actually
+in patch module which cause livepatch symbol lookup failed.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 320b239..64e5686 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -3117,10 +3117,8 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+ 					if (!strcmp(sym_objname, "vmlinux"))
+ 						continue;
+ 
+-					if (!strcmp(sym_objname, objname))
+-						continue;
+-
+ 					external = 1;
++                    continue;
+ 				}
+ 			}
+ 			log_debug("lookup for %s @ 0x%016lx len %lu\n",
+-- 
+2.18.1
+

@@ -2,7 +2,7 @@
 
 Name:           kpatch
 Version:        2.0
-Release:        3.1.24
+Release:        3.1.26
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -30,6 +30,10 @@ Patch0014:0014-livepatch-patch-hook-support-force-enable-disable.patch
 Patch0015:0015-kpatch-build-ignore-debuginfo-in-patch.patch
 Patch0016:0016-add-object-in-kpatch.patch
 Patch0017:0017-create-diff-object-fix-.orc_unwind_ip-error.patch
+Patch0018:0018-use-orignal-reloc-for-symbols-from-modules.patch
+Patch0019:0019-create-diff-object-add-jump-label-support.patch
+Patch0020:0020-kpatch-build-add-compile-flag-fno-reorder-functions.patch
+Patch0021:0021-kpatch-build-don-t-copy-.config-for-out-of-tree-modu.patch
 
 BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel kernel-devel
 Requires:       bc
@@ -60,7 +64,7 @@ export CFLAGS="$RPM_OPT_FLAGS" LDFLAGS="$RPM_LD_FLAGS"
 %install
 %make_install PREFIX=%{_prefix}
 
-install -Dm 0750 -t %{buildroot}/%{_bindir} %{SOURCE1} %{SOURCE2}
+install -Dm 0500 -t %{buildroot}/%{_bindir} %{SOURCE1} %{SOURCE2}
 install -Dm 0500 -t %{buildroot}/opt/patch_workspace/ %{SOURCE3}
 pushd %{buildroot}/opt/patch_workspace
 mkdir hotpatch package
@@ -76,6 +80,8 @@ popd
 %{_datadir}/%{name}/*
 %{_sysconfdir}/init/*
 /opt/patch_workspace/*
+%exclude %{_bindir}/livepatch
+%exclude %{_bindir}/os_hotpatch
 
 %files runtime
 %defattr(-,root,root)
@@ -86,7 +92,19 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
-* Wed Feb 26 2020 Zhipeng Xie<kangenbo@huawei.com> -2.0-3.1.24
+* Thu Mar 12 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -2.0-3.1.26
+- Type:bugfix
+- ID:NA
+- SUG:NA
+- DESC:use orignal reloc for export symbols in all modules
+
+* Thu Mar 12 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -2.0-3.1.25
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:change livepatch and os_hotpatch to permission and exclude in main package
+
+* Wed Feb 26 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -2.0-3.1.24
 - Type:enhancement
 - ID:NA
 - SUG:NA
