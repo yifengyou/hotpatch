@@ -1,7 +1,7 @@
-From dd03a70462783a9e8426ff76e42c41a7eaab644f Mon Sep 17 00:00:00 2001
+From ea1fb4eb836033b33f08047c3a1cb74a1a458fb2 Mon Sep 17 00:00:00 2001
 From: Bin Yang <robin.yb@huawei.com>
 Date: Tue, 16 Jul 2019 14:39:27 +0800
-Subject: [PATCH 16/17] add object in kpatch
+Subject: [PATCH 16/21] add object in kpatch
 
 ---
  kpatch-build/kpatch-build | 3 +++
@@ -30,4 +30,3 @@ index c109ee3..de448dc 100755
  
 -- 
 2.18.1
-

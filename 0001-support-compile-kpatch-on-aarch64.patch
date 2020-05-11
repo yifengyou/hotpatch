@@ -1,35 +1,36 @@
-From 33c4d7a2a31ca10ce943d7ab0603bd814f4ac530 Mon Sep 17 00:00:00 2001
+From 1281e03a115ee04e8ddea9f88d0e4e16b2e5ce57 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Thu, 20 Dec 2018 04:55:38 +0000
-Subject: [PATCH 01/17] support compile kpatch on aarch64
+Subject: [PATCH 01/21] support compile kpatch on aarch64
 
 delete __x86_64__ to support compile kpatch on aarch64.
 
 Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
- kpatch-build/Makefile             |  3 +++
+ kpatch-build/Makefile             |  4 ++++
  kpatch-build/create-diff-object.c | 14 +-------------
- 2 files changed, 4 insertions(+), 13 deletions(-)
+ 2 files changed, 5 insertions(+), 13 deletions(-)
 
 diff --git a/kpatch-build/Makefile b/kpatch-build/Makefile
-index 232b336..974e0f2 100644
+index 7505e07..8efae94 100644
 --- a/kpatch-build/Makefile
 +++ b/kpatch-build/Makefile
-@@ -12,6 +12,9 @@ SOURCES = create-diff-object.c kpatch-elf.c \
- ifeq ($(ARCH),x86_64)
+@@ -14,6 +14,10 @@ ifeq ($(ARCH),x86_64)
  SOURCES += insn/insn.c insn/inat.c
  INSN     = insn/insn.o insn/inat.o
+ insn/%.o: CFLAGS := $(filter-out -Wconversion, $(CFLAGS))
 +else ifeq ($(ARCH),aarch64)
 +SOURCES += insn/insn.c insn/inat.c
 +INSN     = insn/insn.o insn/inat.o
++insn/%.o: CFLAGS := $(filter-out -Wconversion, $(CFLAGS))
  else ifeq ($(ARCH),ppc64le)
  SOURCES += gcc-plugins/ppc64le-plugin.c
  PLUGIN   = gcc-plugins/ppc64le-plugin.so
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index c9d2cc6..7b1deb0 100644
+index aedd07d..2707cdb 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -470,7 +470,6 @@ out:
+@@ -475,7 +475,6 @@ out:
  		log_debug("section %s has changed\n", sec->name);
  }
  
@@ -37,7 +38,7 @@ index c9d2cc6..7b1deb0 100644
  /*
   * Determine if a section has changed only due to a WARN* or might_sleep
   * macro call's embedding of the line number into an instruction operand.
-@@ -581,7 +580,7 @@ static int kpatch_line_macro_change_only(struct section *sec)
+@@ -586,7 +585,7 @@ static int kpatch_line_macro_change_only(struct section *sec)
  
  	return 1;
  }
@@ -46,7 +47,7 @@ index c9d2cc6..7b1deb0 100644
  #define PPC_INSTR_LEN 4
  #define PPC_RA_OFFSET 16
  
-@@ -647,11 +646,6 @@ static int kpatch_line_macro_change_only(struct section *sec)
+@@ -652,11 +651,6 @@ static int kpatch_line_macro_change_only(struct section *sec)
  
  	return 1;
  }
@@ -58,7 +59,7 @@ index c9d2cc6..7b1deb0 100644
  #endif
  
  static void kpatch_compare_sections(struct list_head *seclist)
-@@ -1202,7 +1196,6 @@ static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
+@@ -1215,7 +1209,6 @@ static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
  	kpatch_compare_symbols(&kelf->symbols);
  }
  
@@ -66,7 +67,7 @@ index c9d2cc6..7b1deb0 100644
  static void rela_insn(const struct section *sec, const struct rela *rela,
  		      struct insn *insn)
  {
-@@ -1226,7 +1219,6 @@ static void rela_insn(const struct section *sec, const struct rela *rela,
+@@ -1239,7 +1232,6 @@ static void rela_insn(const struct section *sec, const struct rela *rela,
  			return;
  	}
  }
@@ -74,7 +75,7 @@ index c9d2cc6..7b1deb0 100644
  
  static bool is_callback_section(struct section *sec) {
  
-@@ -1771,7 +1763,6 @@ static int jump_table_group_size(struct kpatch_elf *kelf, int offset)
+@@ -1785,7 +1777,6 @@ static int jump_table_group_size(struct kpatch_elf *kelf, int offset)
  	return size;
  }
  
@@ -82,7 +83,7 @@ index c9d2cc6..7b1deb0 100644
  static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
  {
  	static int size = 0;
-@@ -1806,7 +1797,6 @@ static int smp_locks_group_size(struct kpatch_elf *kelf, int offset)
+@@ -1820,7 +1811,6 @@ static int smp_locks_group_size(struct kpatch_elf *kelf, int offset)
  {
  	return 4;
  }
@@ -90,7 +91,7 @@ index c9d2cc6..7b1deb0 100644
  #ifdef __powerpc64__
  static int fixup_entry_group_size(struct kpatch_elf *kelf, int offset)
  {
-@@ -1901,7 +1891,6 @@ static struct special_section special_sections[] = {
+@@ -1915,7 +1905,6 @@ static struct special_section special_sections[] = {
  		.name		= "__jump_table",
  		.group_size	= jump_table_group_size,
  	},
@@ -98,7 +99,7 @@ index c9d2cc6..7b1deb0 100644
  	{
  		.name		= ".smp_locks",
  		.group_size	= smp_locks_group_size,
-@@ -1914,7 +1903,6 @@ static struct special_section special_sections[] = {
+@@ -1928,7 +1917,6 @@ static struct special_section special_sections[] = {
  		.name		= ".altinstructions",
  		.group_size	= altinstructions_group_size,
  	},
@@ -108,4 +109,3 @@ index c9d2cc6..7b1deb0 100644
  		.name		= "__ftr_fixup",
 -- 
 2.18.1
-

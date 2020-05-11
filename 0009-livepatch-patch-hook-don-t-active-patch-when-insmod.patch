@@ -1,7 +1,7 @@
-From c14444fc4049048abd445462676576cd8b043ea3 Mon Sep 17 00:00:00 2001
+From 66b833f4de9dca62b97f077df962c3702c919664 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Tue, 25 Feb 2020 23:40:37 -0500
-Subject: [PATCH 09/17] livepatch-patch-hook: don't active patch when insmod
+Subject: [PATCH 09/21] livepatch-patch-hook: don't active patch when insmod
 
 Don't active patch after loading the patch when
 DISABLE_AFTER_LOAD is set.
@@ -49,4 +49,3 @@ index 17a5e11..894f0ab 100755
  if [[ -z "$USERSRCDIR" ]] && [[ "$DISTRO" = ubuntu ]]; then
 -- 
 2.18.1
-

@@ -1,0 +1,57 @@
+From 4cad4a9ec87736e938ccd13b62c5ef8e595a591e Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Wed, 15 Apr 2020 06:37:59 -0400
+Subject: [PATCH 22/22] support force enable/disable for x86
+
+detect if the klp_func structure in vmlinux have force
+member, if it has, export KLP_SUPPORT_FORCE=y.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/kpatch-build | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index fd34812..523d5df 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -373,7 +373,7 @@ find_special_section_data() {
+ 	# shellcheck disable=SC2086
+ 	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
+ 		gawk --non-decimal-data $AWK_OPTIONS '
+-		BEGIN { a = b = p = e = o = j = 0 }
++		BEGIN { a = b = p = e = o = j = c = f = 0 }
+ 
+ 		# Set state if name matches
+ 		a == 0 && /DW_AT_name.* alt_instr[[:space:]]*$/ {a = 1; next}
+@@ -382,6 +382,7 @@ find_special_section_data() {
+ 		e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
+ 		o == 0 && /DW_AT_name.* orc_entry[[:space:]]*$/ {o = 1; next}
+ 		j == 0 && /DW_AT_name.* jump_entry[[:space:]]*$/ {j = 1; next}
++		c == 0 && /DW_AT_name.* klp_func[[:space:]]*$/ {c = 1; next}
+ 
+ 		# Reset state unless this abbrev describes the struct size
+ 		a == 1 && !/DW_AT_byte_size/ { a = 0; next }
+@@ -390,6 +391,8 @@ find_special_section_data() {
+ 		e == 1 && !/DW_AT_byte_size/ { e = 0; next }
+ 		o == 1 && !/DW_AT_byte_size/ { o = 0; next }
+ 		j == 1 && !/DW_AT_byte_size/ { j = 0; next }
++		c == 1 && /DW_TAG_structure_type/ { c = 3; next }
++		c == 1 && /DW_AT_name.* force[[:space:]]*$/ {f = 2; next}
+ 
+ 		# Now that we know the size, stop parsing for it
+ 		a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
+@@ -398,9 +401,10 @@ find_special_section_data() {
+ 		e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
+ 		o == 1 {printf("export ORC_STRUCT_SIZE=%d\n", $4); o = 2}
+ 		j == 1 {printf("export JUMP_STRUCT_SIZE=%d\n", $4); j = 2}
++		f == 2 {printf("export KLP_SUPPORT_FORCE=y\n"); f = 3}
+ 
+ 		# Bail out once we have everything
+-		a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 && (o == 2 || skip_o) && (j == 2 || skip_j) {exit}')"
++		a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 && (o == 2 || skip_o) && (j == 2 || skip_j) && c == 3 {exit}')"
+ 
+ 	[[ -n "$SPECIAL_VARS" ]] && eval "$SPECIAL_VARS"
+ 
+-- 
+2.18.1

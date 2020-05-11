@@ -1,7 +1,7 @@
-From 05051ffc7abcb953fb1ec51b0826b41f160ce191 Mon Sep 17 00:00:00 2001
+From 0475b1196c1b5eea3a52e2ff104be91fb27192be Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Wed, 26 Feb 2020 20:28:13 -0500
-Subject: [PATCH 13/17] Add running kernel symbol table to help symbol lookup
+Subject: [PATCH 13/21] Add running kernel symbol table to help symbol lookup
 
 For some duplicate symbols whose section have no other
 symbols, we need running kernel symbol table to help
@@ -15,10 +15,10 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
  3 files changed, 80 insertions(+), 3 deletions(-)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 55db18c..4589ba4 100644
+index 1bec4f4..10d07ba 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -3564,6 +3564,7 @@ int main(int argc, char *argv[])
+@@ -3578,6 +3578,7 @@ int main(int argc, char *argv[])
  	struct sym_compare_type *base_locals, *sym_comp;
  	char *no_profiling_calls = NULL;
  	char *gcc_add_option = NULL, *mlongcall = NULL;
@@ -26,7 +26,7 @@ index 55db18c..4589ba4 100644
  
  	arguments.debug = 0;
  	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
-@@ -3677,8 +3678,12 @@ int main(int argc, char *argv[])
+@@ -3691,8 +3692,12 @@ int main(int argc, char *argv[])
  	 */
  	kpatch_elf_teardown(kelf_patched);
  
@@ -168,4 +168,3 @@ index fed3fe9..00b6ccc 100644
                          struct lookup_result *result);
 -- 
 2.18.1
-

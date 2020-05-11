@@ -1,7 +1,7 @@
-From 720769ca54d446baf9cbc986fd2a8832da45ce71 Mon Sep 17 00:00:00 2001
+From 4e3c6975dcd0d36509a69bbed1f200f3c49fab23 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Wed, 26 Feb 2020 21:01:02 -0500
-Subject: [PATCH 15/17] kpatch-build: ignore debuginfo in patch
+Subject: [PATCH 15/21] kpatch-build: ignore debuginfo in patch
 
 Just ignore all .debug_* sections
 
@@ -12,10 +12,10 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
  2 files changed, 19 insertions(+)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 4589ba4..c466eb0 100644
+index 10d07ba..495cce1 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -2396,6 +2396,23 @@ static void kpatch_include_debug_sections(struct kpatch_elf *kelf)
+@@ -2409,6 +2409,23 @@ static void kpatch_include_debug_sections(struct kpatch_elf *kelf)
  	}
  }
  
@@ -39,14 +39,14 @@ index 4589ba4..c466eb0 100644
  static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
  {
  	struct section *sec, *strsec, *ignoresec;
-@@ -3645,6 +3662,7 @@ int main(int argc, char *argv[])
- 	kpatch_include_standard_elements(kelf_patched);
- 	num_changed = kpatch_include_changed_functions(kelf_patched);
+@@ -3663,6 +3680,7 @@ int main(int argc, char *argv[])
+ 	new_globals_exist = kpatch_include_new_globals(kelf_patched);
+     kpatch_include_new_static_var(kelf_patched);
  	kpatch_include_debug_sections(kelf_patched);
 +	kpatch_ignore_debug_sections(kelf_patched);
- 	callbacks_exist = kpatch_include_callback_elements(kelf_patched);
- 	kpatch_include_force_elements(kelf_patched);
- 	new_globals_exist = kpatch_include_new_globals(kelf_patched);
+ 
+ 	kpatch_process_special_sections(kelf_patched);
+ 
 diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
 index 57487b1..c109ee3 100755
 --- a/kpatch-build/kpatch-build
@@ -61,4 +61,3 @@ index 57487b1..c109ee3 100755
  	if [[ -z "$KPATCH_LDFLAGS" ]]; then
 -- 
 2.18.1
-

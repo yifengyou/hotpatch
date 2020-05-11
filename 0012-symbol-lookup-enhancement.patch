@@ -1,7 +1,7 @@
-From 56ec8b76667fb6c7fbc018a8fe7a77f144232f3f Mon Sep 17 00:00:00 2001
+From cf0a8995e6924d8130087a4859c5bf619515768d Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Wed, 26 Feb 2020 22:03:55 -0500
-Subject: [PATCH 12/17] symbol lookup enhancement
+Subject: [PATCH 12/21] symbol lookup enhancement
 
 For symbols which have same name in one module or have
 length longger than KSYM_NAME_LEN(128 bytes). we add
@@ -14,15 +14,15 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
  kmod/patch/kpatch-patch.h          |   4 +
  kpatch-build/create-diff-object.c  |  46 ++++++++++-
- kpatch-build/create-klp-module.c   |  25 +++++-
+ kpatch-build/create-klp-module.c   |  26 ++++--
  kpatch-build/kpatch-build          |  12 +++
  kpatch-build/kpatch-intermediate.h |   2 +
  kpatch-build/lookup.c              | 123 ++++++++++++++++++++++++++++-
  kpatch-build/lookup.h              |  13 +++
- 7 files changed, 217 insertions(+), 8 deletions(-)
+ 7 files changed, 217 insertions(+), 9 deletions(-)
 
 diff --git a/kmod/patch/kpatch-patch.h b/kmod/patch/kpatch-patch.h
-index 917ea32..7cd6dae 100644
+index da4f6a0..3530f66 100644
 --- a/kmod/patch/kpatch-patch.h
 +++ b/kmod/patch/kpatch-patch.h
 @@ -30,6 +30,8 @@ struct kpatch_patch_func {
@@ -37,17 +37,17 @@ index 917ea32..7cd6dae 100644
 @@ -41,6 +43,8 @@ struct kpatch_patch_dynrela {
  	char *objname;
  	int external;
- 	int addend;
-+	char *ref_name;
-+	long ref_offset;
+ 	long addend;
++    char *ref_name;
++    long ref_offset;
  };
  
  struct kpatch_pre_patch_callback {
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 190753a..55db18c 100644
+index 5f90c6b..1bec4f4 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -2734,6 +2734,28 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
+@@ -2748,6 +2748,28 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
  			funcs[index].old_size = result.size;
  			funcs[index].new_size = sym->sym.st_size;
  			funcs[index].sympos = result.pos;
@@ -68,24 +68,24 @@ index 190753a..55db18c 100644
 +				rela->sym = strsym;
 +				rela->type = absolute_rela_type;
 +				rela->addend = offset_of_string(&kelf->strings, refsym.name);
-+				rela->offset = index * sizeof(*funcs) +
-+					offsetof(struct kpatch_patch_func, ref_name);
++				rela->offset = (unsigned int)(index * sizeof(*funcs) +
++					offsetof(struct kpatch_patch_func, ref_name));
 +
 +			}
 +
  
  			/*
  			 * Add a relocation that will populate
-@@ -2753,7 +2775,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
+@@ -2767,7 +2789,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
  			ALLOC_LINK(rela, &relasec->relas);
  			rela->sym = strsym;
  			rela->type = absolute_rela_type;
 -			rela->addend = offset_of_string(&kelf->strings, sym->name);
 +			rela->addend = offset_of_string(&kelf->strings, strndup(sym->name, KSYM_NAME_LEN-1));
- 			rela->offset = index * sizeof(*funcs) +
- 			               offsetof(struct kpatch_patch_func, name);
+ 			rela->offset = (unsigned int)(index * sizeof(*funcs) +
+ 			               offsetof(struct kpatch_patch_func, name));
  
-@@ -2872,6 +2894,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -2886,6 +2908,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  	struct lookup_result result;
  	char *sym_objname;
  	int ret, vmlinux, external;
@@ -93,7 +93,7 @@ index 190753a..55db18c 100644
  
  	vmlinux = !strcmp(objname, "vmlinux");
  
-@@ -3080,12 +3103,28 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -3094,12 +3117,28 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  			log_debug("lookup for %s @ 0x%016lx len %lu\n",
  			          rela->sym->name, result.value, result.size);
  
@@ -116,23 +116,23 @@ index 190753a..55db18c 100644
 +					rela2->sym = strsym;
 +					rela2->type = absolute_rela_type;
 +					rela2->addend = offset_of_string(&kelf->strings, refsym.name);
-+					rela2->offset = index * sizeof(*krelas) +
-+						offsetof(struct kpatch_relocation, ref_name);
++					rela2->offset = (unsigned int)(index * sizeof(*krelas) +
++						offsetof(struct kpatch_relocation, ref_name));
 +				}
 +			}
  			ksyms[index].pos = result.pos;
  			ksyms[index].type = rela->sym->type;
  			ksyms[index].bind = rela->sym->bind;
-@@ -3094,7 +3133,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -3108,7 +3147,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  			ALLOC_LINK(rela2, &ksym_sec->rela->relas);
  			rela2->sym = strsym;
  			rela2->type = absolute_rela_type;
 -			rela2->addend = offset_of_string(&kelf->strings, rela->sym->name);
 +			rela2->addend = offset_of_string(&kelf->strings, strndup(rela->sym->name, KSYM_NAME_LEN-1));
- 			rela2->offset = index * sizeof(*ksyms) + \
- 					offsetof(struct kpatch_symbol, name);
+ 			rela2->offset = (unsigned int)(index * sizeof(*ksyms) + \
+ 					offsetof(struct kpatch_symbol, name));
  
-@@ -3113,6 +3152,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -3127,6 +3166,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  			krelas[index].addend = rela->addend;
  			krelas[index].type = rela->type;
  			krelas[index].external = external;
@@ -141,7 +141,7 @@ index 190753a..55db18c 100644
  			/* add rela to fill in krelas[index].dest field */
  			ALLOC_LINK(rela2, &krela_sec->rela->relas);
 diff --git a/kpatch-build/create-klp-module.c b/kpatch-build/create-klp-module.c
-index d995525..5073a04 100644
+index a97b146..0b441fa 100644
 --- a/kpatch-build/create-klp-module.c
 +++ b/kpatch-build/create-klp-module.c
 @@ -38,7 +38,9 @@ enum loglevel loglevel = NORMAL;
@@ -175,18 +175,18 @@ index d995525..5073a04 100644
 @@ -176,6 +183,7 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
  	struct rela *rela;
  	char *objname;
- 	int nr, index, offset, dest_off;
-+	char *ref_name;
+ 	unsigned int nr, index, offset, dest_off;
++    char *ref_name;
  
  	krelas = krelasec->data->d_buf;
- 	nr = krelasec->data->d_size / sizeof(*krelas);
+ 	nr = (unsigned int)(krelasec->data->d_size / sizeof(*krelas));
 @@ -200,6 +208,15 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
  
  		objname = strings + rela->addend;
  
 +		/* Get the unique ref_name */
 +		rela = find_rela_by_offset(krelasec->rela,
-+					   offset + offsetof(struct kpatch_relocation, ref_name));
++					   (unsigned int)(offset + offsetof(struct kpatch_relocation, ref_name)));
 +		if (!rela)
 +			ref_name = NULL;
 +		else {
@@ -195,13 +195,14 @@ index d995525..5073a04 100644
 +
  		/* Get the .kpatch.symbol entry for the rela src */
  		rela = find_rela_by_offset(krelasec->rela,
- 					   offset + offsetof(struct kpatch_relocation, ksym));
-@@ -207,7 +224,7 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
+ 			(unsigned int)(offset + offsetof(struct kpatch_relocation, ksym)));
+@@ -207,8 +224,7 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
  			ERROR("find_rela_by_offset");
  
  		/* Create (or find) a klp symbol from the rela src entry */
--		sym = find_or_add_ksym_to_symbols(kelf, ksymsec, strings, rela->addend);
-+		sym = find_or_add_ksym_to_symbols(kelf, ksymsec, strings, rela->addend, ref_name, krelas[index].ref_offset);
+-		sym = find_or_add_ksym_to_symbols(kelf, ksymsec, strings,
+-							(unsigned int)rela->addend);
++		sym = find_or_add_ksym_to_symbols(kelf, ksymsec, strings, (unsigned int)rela->addend, ref_name, krelas[index].ref_offset);
  		if (!sym)
  			ERROR("error finding or adding ksym to symtab");
  
@@ -229,15 +230,15 @@ index 4896136..8bef7fb 100755
  				BUILDDIR="/lib/modules/$ARCHVERSION/build/"
  				SYMVERS_FILE="$TEMPDIR/Module.symvers"
 diff --git a/kpatch-build/kpatch-intermediate.h b/kpatch-build/kpatch-intermediate.h
-index 3dea775..59deed0 100644
+index 7230cd4..7247cac 100644
 --- a/kpatch-build/kpatch-intermediate.h
 +++ b/kpatch-build/kpatch-intermediate.h
 @@ -39,6 +39,8 @@ struct kpatch_relocation {
- 	int external;
+ 	long addend;
  	char *objname; /* object to which this rela applies to */
  	struct kpatch_symbol *ksym;
-+	char *ref_name;
-+	long ref_offset;
++    char *ref_name;
++    long ref_offset;
  };
  
  struct kpatch_arch {
@@ -451,4 +452,3 @@ index 420d0f0..fed3fe9 100644
  #endif /* _LOOKUP_H_ */
 -- 
 2.18.1
-

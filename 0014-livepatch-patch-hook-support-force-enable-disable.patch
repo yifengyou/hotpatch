@@ -1,7 +1,7 @@
-From b63c72375420cb098a81167c48d822d596e770a9 Mon Sep 17 00:00:00 2001
+From aacab0b9a2f65adfee8258515cbbb34546f3acc7 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Wed, 26 Feb 2020 20:43:34 -0500
-Subject: [PATCH 14/17] livepatch-patch-hook: support force enable/disable
+Subject: [PATCH 14/21] livepatch-patch-hook: support force enable/disable
 
 we use force to indicate function which bypass stack check
 
@@ -64,4 +64,3 @@ index 8bef7fb..57487b1 100755
  fi
 -- 
 2.18.1
-

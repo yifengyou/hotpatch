@@ -1,7 +1,7 @@
-From a743990bb6d871fb8cd5ffe6f78ffaa8d5ee7c0a Mon Sep 17 00:00:00 2001
+From f6d53ba1e5d1b8c8e026bd537235e201f8482065 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Fri, 2 Nov 2018 17:25:38 +0000
-Subject: [PATCH 07/17] create-diff-object: create dynamic relocs for changed
+Subject: [PATCH 07/21] create-diff-object: create dynamic relocs for changed
  functions in this object
 
 Currently, we only create dynamic relocs for changed functions of
@@ -26,10 +26,10 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
  1 file changed, 16 insertions(+), 4 deletions(-)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 18ed1f7..5cdb97b 100644
+index 2cda233..67c062e 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -2883,6 +2883,14 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -2897,6 +2897,14 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  			 */
  			if (may_need_dynrela(rela))
  				toc_rela(rela)->need_dynrela = 1;
@@ -44,7 +44,7 @@ index 18ed1f7..5cdb97b 100644
  		}
  	}
  
-@@ -2965,10 +2973,14 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -2979,10 +2987,14 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  				/* An unchanged local symbol */
  				ret = lookup_local_symbol(table,
  					rela->sym->name, &result);
@@ -65,4 +65,3 @@ index 18ed1f7..5cdb97b 100644
  				/*
 -- 
 2.18.1
-

@@ -1,7 +1,7 @@
-From 20de56a8393e6be3b556156124aa4b2139b10733 Mon Sep 17 00:00:00 2001
+From e438d0139d5e0c60b1e8dc78af8825f1a26fa438 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Wed, 26 Feb 2020 07:36:59 -0500
-Subject: [PATCH 11/17] support c plus kernel module
+Subject: [PATCH 11/21] support c plus kernel module
 
 support GNU_UNIQUE type symbols.
 support .group section corelation.
@@ -17,10 +17,10 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
  5 files changed, 55 insertions(+), 25 deletions(-)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 643ae3e..190753a 100644
+index bb2a803..5f90c6b 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -454,7 +454,7 @@ static void kpatch_compare_correlated_nonrela_section(struct section *sec)
+@@ -459,7 +459,7 @@ static void kpatch_compare_correlated_nonrela_section(struct section *sec)
  {
  	struct section *sec1 = sec, *sec2 = sec->twin;
  
@@ -29,7 +29,7 @@ index 643ae3e..190753a 100644
  	    memcmp(sec1->data->d_buf, sec2->data->d_buf, sec1->data->d_size))
  		sec->status = CHANGED;
  	else
-@@ -470,7 +470,7 @@ static void kpatch_compare_correlated_section(struct section *sec)
+@@ -475,7 +475,7 @@ static void kpatch_compare_correlated_section(struct section *sec)
  	    sec1->sh.sh_flags != sec2->sh.sh_flags ||
  	    sec1->sh.sh_entsize != sec2->sh.sh_entsize ||
  	    (sec1->sh.sh_addralign != sec2->sh.sh_addralign &&
@@ -38,7 +38,7 @@ index 643ae3e..190753a 100644
  		DIFF_FATAL("%s section header details differ from %s", sec1->name, sec2->name);
  
  	/* Short circuit for mcount sections, we rebuild regardless */
-@@ -907,6 +907,33 @@ static void kpatch_correlate_section(struct section *sec1, struct section *sec2)
+@@ -912,6 +912,33 @@ static void kpatch_correlate_section(struct section *sec1, struct section *sec2)
  		kpatch_correlate_symbol(sec1->sym, sec2->sym);
  }
  
@@ -72,7 +72,7 @@ index 643ae3e..190753a 100644
  static void kpatch_correlate_sections(struct list_head *seclist1, struct list_head *seclist2)
  {
  	struct section *sec1, *sec2;
-@@ -924,15 +951,19 @@ static void kpatch_correlate_sections(struct list_head *seclist1, struct list_he
+@@ -929,15 +956,19 @@ static void kpatch_correlate_sections(struct list_head *seclist1, struct list_he
  					      sec1->secsym))
  				continue;
  
@@ -100,7 +100,7 @@ index 643ae3e..190753a 100644
  					continue;
  			}
  
-@@ -1507,17 +1538,6 @@ static void kpatch_verify_patchability(struct kpatch_elf *kelf)
+@@ -1519,17 +1550,6 @@ static void kpatch_verify_patchability(struct kpatch_elf *kelf)
  			errs++;
  		}
  
@@ -132,10 +132,10 @@ index 4e38412..4896136 100755
  cp -f "$TEMPDIR/patch/$MODNAME.ko" "$BASE" || die
  
 diff --git a/kpatch-build/kpatch-elf.c b/kpatch-build/kpatch-elf.c
-index 1c0e099..debf028 100644
+index c6af59e..b3ca7f5 100644
 --- a/kpatch-build/kpatch-elf.c
 +++ b/kpatch-build/kpatch-elf.c
-@@ -708,8 +708,14 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
+@@ -710,8 +710,14 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
  	unsigned int index;
  
  	index = 1; /* elf write function handles NULL section 0 */
@@ -190,4 +190,3 @@ index 8387e8b..4e2fcb9 100644
  			result->size = sym->size;
 -- 
 2.18.1
-

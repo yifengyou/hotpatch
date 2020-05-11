@@ -1,7 +1,7 @@
-From c03772c4e29473eae68009c12efc182238d103c7 Mon Sep 17 00:00:00 2001
+From b407defcd16f6a8a49ed0f66d4902eb0bc1b2021 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Fri, 2 Nov 2018 17:24:42 +0000
-Subject: [PATCH 04/17] livepatch, fix: use THIS modname as the name of
+Subject: [PATCH 04/21] livepatch, fix: use THIS modname as the name of
  ddebug_table
 
 We just want a unique name for every module, so put a _ddebug in
@@ -29,4 +29,3 @@ index e12fd50..613d037 100644
  #endif
 -- 
 2.18.1
-

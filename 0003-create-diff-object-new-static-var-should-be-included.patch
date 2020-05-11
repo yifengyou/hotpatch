@@ -1,7 +1,7 @@
-From 3af07fd0f178a4c6e2ae68207c3fedfd10672e65 Mon Sep 17 00:00:00 2001
+From 4511c2f36744529d0298a4d8e56d0b38c2ea5714 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Tue, 25 Feb 2020 22:44:50 -0500
-Subject: [PATCH 03/17] create-diff-object: new static var should be included
+Subject: [PATCH 03/21] create-diff-object: new static var should be included
 
 Before this patch, only global variables(no referenced) will be
 included by kpatch-build. But some macros put some static varibles
@@ -18,10 +18,10 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
  1 file changed, 15 insertions(+)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 58789f1..93570df 100644
+index 7a27b58..267bd66 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -1689,6 +1689,20 @@ static void kpatch_include_force_elements(struct kpatch_elf *kelf)
+@@ -1702,6 +1702,20 @@ static void kpatch_include_force_elements(struct kpatch_elf *kelf)
  			sym->include = 0;
  }
  
@@ -42,14 +42,13 @@ index 58789f1..93570df 100644
  static int kpatch_include_new_globals(struct kpatch_elf *kelf)
  {
  	struct symbol *sym;
-@@ -3554,6 +3568,7 @@ int main(int argc, char *argv[])
+@@ -3567,6 +3581,7 @@ int main(int argc, char *argv[])
  	callbacks_exist = kpatch_include_callback_elements(kelf_patched);
  	kpatch_include_force_elements(kelf_patched);
  	new_globals_exist = kpatch_include_new_globals(kelf_patched);
 +    kpatch_include_new_static_var(kelf_patched);
+ 	kpatch_include_debug_sections(kelf_patched);
  
  	kpatch_process_special_sections(kelf_patched);
- 
 -- 
 2.18.1
-

@@ -1,0 +1,56 @@
+From 50401005b1a16b93307390983dd61f480492d495 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Wed, 22 Apr 2020 05:55:33 -0400
+Subject: [PATCH] create-diff-object: fix duplicate symbols for vmlinux
+
+symbol pos in vmlinux may be different with runtime
+/proc/kallsyms, use ref_name and ref_offset method too.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 28 +++++++++++++++-------------
+ 1 file changed, 15 insertions(+), 13 deletions(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 2b1ee36..c0c8106 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -3100,21 +3100,23 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+ 			else {
+ 				/* for modules, src is discovered at runtime */
+ 				ksyms[index].src = 0;
+-				if (lookup_is_duplicate_symbol(table, rela->sym->name, objname, result.pos)) {
+-					struct lookup_refsym refsym;
+-
+-					if (lookup_ref_symbol_offset(table, rela->sym->name, &refsym, objname, &ref_offset))
+-						ERROR("unresolvable ambiguity on symbol %s\n", rela->sym->name);
+-
+-					/* add rela to fill in ref_name field */
+-					ALLOC_LINK(rela2, &krela_sec->rela->relas);
+-					rela2->sym = strsym;
+-					rela2->type = absolute_rela_type;
+-					rela2->addend = offset_of_string(&kelf->strings, refsym.name);
+-					rela2->offset = (unsigned int)(index * sizeof(*krelas) +
++			}
++
++			if (lookup_is_duplicate_symbol(table, rela->sym->name, objname, result.pos)) {
++				struct lookup_refsym refsym;
++
++				if (lookup_ref_symbol_offset(table, rela->sym->name, &refsym, objname, &ref_offset))
++					ERROR("unresolvable ambiguity on symbol %s\n", rela->sym->name);
++
++				/* add rela to fill in ref_name field */
++				ALLOC_LINK(rela2, &krela_sec->rela->relas);
++				rela2->sym = strsym;
++				rela2->type = absolute_rela_type;
++				rela2->addend = offset_of_string(&kelf->strings, refsym.name);
++				rela2->offset = (unsigned int)(index * sizeof(*krelas) +
+ 						offsetof(struct kpatch_relocation, ref_name));
+-				}
+ 			}
++
+ 			ksyms[index].pos = result.pos;
+ 			ksyms[index].type = rela->sym->type;
+ 			ksyms[index].bind = rela->sym->bind;
+-- 
+2.18.1
