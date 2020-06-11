@@ -1,8 +1,9 @@
-%global raw_version 0.9.0
+%global raw_version 0.9.1
 
 Name:           kpatch
-Version:        2.0
-Release:        3.1.26
+Epoch:          1
+Version:        %{raw_version}
+Release:        2
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -34,8 +35,10 @@ Patch0018:0018-use-orignal-reloc-for-symbols-from-modules.patch
 Patch0019:0019-create-diff-object-add-jump-label-support.patch
 Patch0020:0020-kpatch-build-add-compile-flag-fno-reorder-functions.patch
 Patch0021:0021-kpatch-build-don-t-copy-.config-for-out-of-tree-modu.patch
+Patch0022:0022-support-force-enable-disable-for-x86.patch
+Patch0023:0023-create-diff-object-fix-duplicate-symbols-for-vmlinux.patch
 
-BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel kernel-devel
+BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel kernel-devel git
 Requires:       bc
 
 %description
@@ -55,7 +58,7 @@ Dynamic kernel patching
 %package_help
 
 %prep
-%autosetup -n %{name}-%{raw_version} -p1
+%autosetup -n %{name}-%{raw_version} -p1 -Sgit
 
 %build
 export CFLAGS="$RPM_OPT_FLAGS" LDFLAGS="$RPM_LD_FLAGS"
@@ -92,6 +95,19 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Wed Apr 22 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-2
+- Type:bugfix
+- ID:NA
+- SUG:NA
+- DESC:fix duplicate symbols in vmlinux
+
+* Wed Apr 15 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-1
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:rebase from upstream version v0.9.1
+       Use Epoch to make the version number consistent with the upstream
+
 * Thu Mar 12 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -2.0-3.1.26
 - Type:bugfix
 - ID:NA

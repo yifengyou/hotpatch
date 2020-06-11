@@ -1,7 +1,7 @@
-From 65a3ae0c692a22d097f7257ae88bbe6bc2b73de8 Mon Sep 17 00:00:00 2001
+From da47ad5e439e9ba9422cac2ade847463bc8578ee Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Thu, 12 Mar 2020 06:56:21 -0400
-Subject: [PATCH] kpatch-build: add compile flag -fno-reorder-functions
+Subject: [PATCH 20/21] kpatch-build: add compile flag -fno-reorder-functions
 
 Sometimes function foo with static variables can be put in
 .text.foo section in original binary and be put in
@@ -37,4 +37,3 @@ index de448dc..ad7ab71 100755
  echo "Reading special section data"
 -- 
 2.18.1
-

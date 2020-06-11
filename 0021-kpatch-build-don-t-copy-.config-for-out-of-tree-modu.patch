@@ -1,7 +1,7 @@
-From 1155b58be699eb2e55af7757e6b0d0ce03356d63 Mon Sep 17 00:00:00 2001
+From b05aaaf13978393f8e9c2329a80765c0069e7e87 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Thu, 12 Mar 2020 07:37:00 -0400
-Subject: [PATCH] kpatch-build: don't copy .config for out of tree module
+Subject: [PATCH 21/21] kpatch-build: don't copy .config for out of tree module
 
 Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
@@ -23,4 +23,3 @@ index ad7ab71..fd34812 100755
  # according to .config and kernel version
 -- 
 2.18.1
-
