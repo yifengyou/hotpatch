@@ -1,0 +1,4 @@
+version_control: github
+src_repo: dynup/kpatch
+tag_prefix: ^v
+seperator: .
