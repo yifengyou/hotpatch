@@ -690,24 +690,28 @@ function fn_main()
 
 function fn_prepare()
 {
+    local src_dir=""
     kerver=`uname -r`
-    kerver=${kerver%.x86_64}
-    kerver=${kerver%.aarch64}
+    if [ ! -d /usr/src/linux-$kerver ];then
+        kerver=${kerver%.x86_64}
+        kerver=${kerver%.aarch64}
+        src_dir="kernels"
+    fi
     echo kernel version:$kerver
     if [ ! -L kernel-source ];then
         if [ -d /arm/arm_kernel ];then
             ln -s /arm/arm_kernel/linux-$kerver kernel-source
         else
-            ln -s /usr/src/kernels/linux-$kerver kernel-source
-            cp /lib/modules/`uname -r`/build/Makefile /usr/src/kernels/linux-$kerver 
+            ln -s /usr/src/$src_dir/linux-$kerver kernel-source
+            cp /lib/modules/`uname -r`/build/Makefile /usr/src/$src_dir/linux-$kerver 
         fi
     fi
     if [ ! -L .config ];then
         if [ -d /arm/arm_kernel ];then
             ln -s /arm/arm_kernel/linux-$kerver/.config .config
         else
-            ln -s /usr/src/kernels/linux-$kerver/.config  .config
-            cp /lib/modules/`uname -r`/build/.config /usr/src/kernels/linux-$kerver 
+            ln -s /usr/src/$src_dir/linux-$kerver/.config  .config
+            cp /lib/modules/`uname -r`/build/.config /usr/src/$src_dir/linux-$kerver 
         fi
     fi
     rm -rf $G_KPATCH_FLAGS
