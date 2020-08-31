@@ -3,7 +3,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        %{raw_version}
-Release:        2
+Release:        3
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -95,6 +95,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Sat Aug 29 2020 Yeqing Peng<pengyeqing@huawei.com> -1:0.9.1-3
+- Type:bugfix
+- ID:NA
+- SUG:NA
+- DESC:adapt kernel source path and name
+
 * Wed Apr 22 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-2
 - Type:bugfix
 - ID:NA
