@@ -1,7 +1,7 @@
-From 66b833f4de9dca62b97f077df962c3702c919664 Mon Sep 17 00:00:00 2001
+From 1bc8c76085839576576fc780336fbd9d7ebd29ef Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Tue, 25 Feb 2020 23:40:37 -0500
-Subject: [PATCH 09/21] livepatch-patch-hook: don't active patch when insmod
+Subject: [PATCH 09/23] livepatch-patch-hook: don't active patch when insmod
 
 Don't active patch after loading the patch when
 DISABLE_AFTER_LOAD is set.
@@ -13,7 +13,7 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
  2 files changed, 6 insertions(+)
 
 diff --git a/kmod/patch/livepatch-patch-hook.c b/kmod/patch/livepatch-patch-hook.c
-index 613d037..163ae1d 100644
+index 6ae40de..fb23a94 100644
 --- a/kmod/patch/livepatch-patch-hook.c
 +++ b/kmod/patch/livepatch-patch-hook.c
 @@ -455,6 +455,7 @@ static int __init patch_init(void)
@@ -49,3 +49,4 @@ index 17a5e11..894f0ab 100755
  if [[ -z "$USERSRCDIR" ]] && [[ "$DISTRO" = ubuntu ]]; then
 -- 
 2.18.1
+

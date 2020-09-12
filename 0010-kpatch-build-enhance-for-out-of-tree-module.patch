@@ -1,7 +1,7 @@
-From 8486c25a0b94eb9b415572eec58508204d8e5458 Mon Sep 17 00:00:00 2001
+From a1303033db88fa0036387f3a86f71d162bd5c037 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Wed, 26 Feb 2020 06:44:06 -0500
-Subject: [PATCH 10/21] kpatch-build: enhance for out of tree module
+Subject: [PATCH 10/23] kpatch-build: enhance for out of tree module
 
 support set USERMODBUILDDIR to build patch for out
 of tree module.
@@ -130,3 +130,4 @@ index 894f0ab..4e38412 100755
  		readelf -s --wide "$KOBJFILE_PATH" > "$SYMTAB"
 -- 
 2.18.1
+

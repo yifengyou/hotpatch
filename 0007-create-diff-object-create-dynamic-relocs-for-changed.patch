@@ -1,7 +1,7 @@
-From f6d53ba1e5d1b8c8e026bd537235e201f8482065 Mon Sep 17 00:00:00 2001
+From 66d1b112903b4942cc1033a1be93ae79c1ecf8ef Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Fri, 2 Nov 2018 17:25:38 +0000
-Subject: [PATCH 07/21] create-diff-object: create dynamic relocs for changed
+Subject: [PATCH 07/23] create-diff-object: create dynamic relocs for changed
  functions in this object
 
 Currently, we only create dynamic relocs for changed functions of
@@ -22,29 +22,29 @@ Signed-off-by: Zhou Chengming <zhouchengming1@huawei.com>
 Signed-off-by: Li Bin <huawei.libin@huawei.com>
 Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
- kpatch-build/create-diff-object.c | 20 ++++++++++++++++----
- 1 file changed, 16 insertions(+), 4 deletions(-)
+ kpatch-build/create-diff-object.c | 23 +++++++++++++++++++----
+ 1 file changed, 19 insertions(+), 4 deletions(-)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 2cda233..67c062e 100644
+index ba2976b..8ce3b59 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -2897,6 +2897,14 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -2900,6 +2900,14 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  			 */
  			if (may_need_dynrela(rela))
  				toc_rela(rela)->need_dynrela = 1;
 +			if (rela->sym->sec) {
 +				if (rela->sym->type == STT_FUNC &&
-+					rela->sym->status == CHANGED &&
-+					rela->sym->sec != sec->base &&
-+					sec->base->sym &&
-+					sec->base->sym->type == STT_FUNC)
-+				toc_rela(rela)->need_dynrela = 1;
++						rela->sym->status == CHANGED &&
++						rela->sym->sec != sec->base &&
++						sec->base->sym &&
++						sec->base->sym->type == STT_FUNC)
++					toc_rela(rela)->need_dynrela = 1;
 +			}
  		}
  	}
  
-@@ -2979,10 +2987,14 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -2982,10 +2990,17 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  				/* An unchanged local symbol */
  				ret = lookup_local_symbol(table,
  					rela->sym->name, &result);
@@ -53,10 +53,13 @@ index 2cda233..67c062e 100644
 -					      rela->sym->name, sec->base->name);
 -
 +				if (ret) {
-+					/* maybe it is a global symbol converted in kpatch_create_patches_sections*/
++					/*
++					 * maybe it is a global symbol converted in
++					 * kpatch_create_patches_sections
++					 */
 +					ret = lookup_global_symbol(table,
 +						rela->sym->name, &result);
-+					if (ret) 
++					if (ret)
 +						ERROR("lookup_local_symbol %s needed for %s",
 +								rela->sym->name, sec->base->name);
 +				}
@@ -65,3 +68,4 @@ index 2cda233..67c062e 100644
  				/*
 -- 
 2.18.1
+

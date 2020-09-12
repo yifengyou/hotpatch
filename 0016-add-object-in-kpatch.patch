@@ -1,8 +1,11 @@
-From ea1fb4eb836033b33f08047c3a1cb74a1a458fb2 Mon Sep 17 00:00:00 2001
+From 24392c6f62e26afb192992808772bd19ceab5446 Mon Sep 17 00:00:00 2001
 From: Bin Yang <robin.yb@huawei.com>
 Date: Tue, 16 Jul 2019 14:39:27 +0800
-Subject: [PATCH 16/21] add object in kpatch
+Subject: [PATCH 16/23] add object in kpatch
 
+it is required by make_hotpatch users
+
+Signed-off-by: Bin Yang <robin.yb@huawei.com>
 ---
  kpatch-build/kpatch-build | 3 +++
  1 file changed, 3 insertions(+)
@@ -30,3 +33,4 @@ index c109ee3..de448dc 100755
  
 -- 
 2.18.1
+

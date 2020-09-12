@@ -3,7 +3,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        %{raw_version}
-Release:        3
+Release:        4
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -31,7 +31,7 @@ Patch0014:0014-livepatch-patch-hook-support-force-enable-disable.patch
 Patch0015:0015-kpatch-build-ignore-debuginfo-in-patch.patch
 Patch0016:0016-add-object-in-kpatch.patch
 Patch0017:0017-create-diff-object-fix-.orc_unwind_ip-error.patch
-Patch0018:0018-use-orignal-reloc-for-symbols-from-modules.patch
+Patch0018:0018-use-original-reloc-for-symbols-from-modules.patch
 Patch0019:0019-create-diff-object-add-jump-label-support.patch
 Patch0020:0020-kpatch-build-add-compile-flag-fno-reorder-functions.patch
 Patch0021:0021-kpatch-build-don-t-copy-.config-for-out-of-tree-modu.patch
@@ -95,6 +95,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Sat Sep 12 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-4
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:code optimization
+
 * Sat Aug 29 2020 Yeqing Peng<pengyeqing@huawei.com> -1:0.9.1-3
 - Type:bugfix
 - ID:NA

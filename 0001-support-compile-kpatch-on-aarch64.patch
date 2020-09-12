@@ -1,7 +1,7 @@
-From 1281e03a115ee04e8ddea9f88d0e4e16b2e5ce57 Mon Sep 17 00:00:00 2001
+From 0de9a5da0cc278973caabfb9929dc58514c73639 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Thu, 20 Dec 2018 04:55:38 +0000
-Subject: [PATCH 01/21] support compile kpatch on aarch64
+Subject: [PATCH 01/23] support compile kpatch on aarch64
 
 delete __x86_64__ to support compile kpatch on aarch64.
 
@@ -109,3 +109,4 @@ index aedd07d..2707cdb 100644
  		.name		= "__ftr_fixup",
 -- 
 2.18.1
+

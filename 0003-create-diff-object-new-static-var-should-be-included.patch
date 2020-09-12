@@ -1,7 +1,7 @@
-From 4511c2f36744529d0298a4d8e56d0b38c2ea5714 Mon Sep 17 00:00:00 2001
+From 232f97ae9acb73ad7bb0b974f6a94ae4c4ca03d9 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Tue, 25 Feb 2020 22:44:50 -0500
-Subject: [PATCH 03/21] create-diff-object: new static var should be included
+Subject: [PATCH 03/23] create-diff-object: new static var should be included
 
 Before this patch, only global variables(no referenced) will be
 included by kpatch-build. But some macros put some static varibles
@@ -14,41 +14,43 @@ cause a problem even the new static variables are in unbundled section.
 Signed-off-by: Zhou Chengming <zhouchengming1@huawei.com>
 Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
- kpatch-build/create-diff-object.c | 15 +++++++++++++++
- 1 file changed, 15 insertions(+)
+ kpatch-build/create-diff-object.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 7a27b58..267bd66 100644
+index b161fee..b94060e 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -1702,6 +1702,20 @@ static void kpatch_include_force_elements(struct kpatch_elf *kelf)
+@@ -1704,6 +1704,21 @@ static void kpatch_include_force_elements(struct kpatch_elf *kelf)
  			sym->include = 0;
  }
  
 +int kpatch_include_new_static_var(struct kpatch_elf *kelf)
 +{
-+        struct symbol *sym;
++	struct symbol *sym;
 +
-+        list_for_each_entry(sym, &kelf->symbols, list) {
-+                if (sym->status == NEW &&
-+                        sym->bind == STB_LOCAL &&
-+                        (sym->type == STT_OBJECT || (sym->type == STT_NOTYPE && sym->name[0] != '$')))
-+                        kpatch_include_symbol(sym);
-+        }
++	list_for_each_entry(sym, &kelf->symbols, list) {
++		if (sym->status == NEW &&
++				sym->bind == STB_LOCAL &&
++				(sym->type == STT_OBJECT ||
++				 (sym->type == STT_NOTYPE && sym->name[0] != '$')))
++			kpatch_include_symbol(sym);
++	}
 +
-+        return 0;
++	return 0;
 +}
 +
  static int kpatch_include_new_globals(struct kpatch_elf *kelf)
  {
  	struct symbol *sym;
-@@ -3567,6 +3581,7 @@ int main(int argc, char *argv[])
+@@ -3573,6 +3588,7 @@ int main(int argc, char *argv[])
  	callbacks_exist = kpatch_include_callback_elements(kelf_patched);
  	kpatch_include_force_elements(kelf_patched);
  	new_globals_exist = kpatch_include_new_globals(kelf_patched);
-+    kpatch_include_new_static_var(kelf_patched);
++	kpatch_include_new_static_var(kelf_patched);
  	kpatch_include_debug_sections(kelf_patched);
  
  	kpatch_process_special_sections(kelf_patched);
 -- 
 2.18.1
+
