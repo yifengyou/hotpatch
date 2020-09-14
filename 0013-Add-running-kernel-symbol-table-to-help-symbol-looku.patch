@@ -1,7 +1,7 @@
-From 0475b1196c1b5eea3a52e2ff104be91fb27192be Mon Sep 17 00:00:00 2001
+From 5e6c1b2c91af547ad53faafeec20cddaedf7aaa4 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Wed, 26 Feb 2020 20:28:13 -0500
-Subject: [PATCH 13/21] Add running kernel symbol table to help symbol lookup
+Subject: [PATCH 13/23] Add running kernel symbol table to help symbol lookup
 
 For some duplicate symbols whose section have no other
 symbols, we need running kernel symbol table to help
@@ -10,15 +10,15 @@ symbol lookup.
 Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
  kpatch-build/create-diff-object.c |  7 ++-
- kpatch-build/lookup.c             | 73 ++++++++++++++++++++++++++++++-
+ kpatch-build/lookup.c             | 74 ++++++++++++++++++++++++++++++-
  kpatch-build/lookup.h             |  3 +-
- 3 files changed, 80 insertions(+), 3 deletions(-)
+ 3 files changed, 81 insertions(+), 3 deletions(-)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 1bec4f4..10d07ba 100644
+index 73c557b..c5320d4 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -3578,6 +3578,7 @@ int main(int argc, char *argv[])
+@@ -3597,6 +3597,7 @@ int main(int argc, char *argv[])
  	struct sym_compare_type *base_locals, *sym_comp;
  	char *no_profiling_calls = NULL;
  	char *gcc_add_option = NULL, *mlongcall = NULL;
@@ -26,7 +26,7 @@ index 1bec4f4..10d07ba 100644
  
  	arguments.debug = 0;
  	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
-@@ -3691,8 +3692,12 @@ int main(int argc, char *argv[])
+@@ -3710,8 +3711,12 @@ int main(int argc, char *argv[])
  	 */
  	kpatch_elf_teardown(kelf_patched);
  
@@ -41,7 +41,7 @@ index 1bec4f4..10d07ba 100644
  		free(sym_comp->name);
  	}
 diff --git a/kpatch-build/lookup.c b/kpatch-build/lookup.c
-index 190a7d8..8f53567 100644
+index 1dd183f..03a5b32 100644
 --- a/kpatch-build/lookup.c
 +++ b/kpatch-build/lookup.c
 @@ -45,6 +45,7 @@ struct object_symbol {
@@ -52,7 +52,7 @@ index 190a7d8..8f53567 100644
  };
  
  struct export_symbol {
-@@ -284,6 +285,56 @@ static void symtab_read(struct lookup_table *table, char *path)
+@@ -284,6 +285,57 @@ static void symtab_read(struct lookup_table *table, char *path)
  	fclose(file);
  }
  
@@ -63,9 +63,10 @@ index 190a7d8..8f53567 100644
 +	unsigned long value;
 +	int i, j, idx;
 +	char line[256], name[256], type[256], mod[256];
-+	idx =  0;
 +
-+	if ((file = fopen(path, "r")) == NULL)
++	idx =  0;
++	file = fopen(path, "r");
++	if (file == NULL)
 +		ERROR("fopen");
 +
 +	while (fgets(line, 256, file)) {
@@ -109,7 +110,7 @@ index 190a7d8..8f53567 100644
  /*
   * Symvers file format is the following for kernels v5.3 and newer:
   * <CRC>	<Symbol>	<Namespace>	<Module>	<Export Type>
-@@ -352,7 +403,8 @@ static void symvers_read(struct lookup_table *table, char *path)
+@@ -352,7 +404,8 @@ static void symvers_read(struct lookup_table *table, char *path)
  }
  
  struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
@@ -119,7 +120,7 @@ index 190a7d8..8f53567 100644
  {
  	struct lookup_table *table;
  
-@@ -363,6 +415,8 @@ struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
+@@ -363,6 +416,8 @@ struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
  
  	symtab_read(table, symtab_path);
  	symvers_read(table, symvers_path);
@@ -128,7 +129,7 @@ index 190a7d8..8f53567 100644
  	find_local_syms(table, hint, locals);
  
  	return table;
-@@ -603,6 +657,23 @@ int lookup_ref_symbol_offset(struct lookup_table *table, char *name,
+@@ -609,6 +664,23 @@ int lookup_ref_symbol_offset(struct lookup_table *table, char *name,
  		}
  	}
  
@@ -153,7 +154,7 @@ index 190a7d8..8f53567 100644
  }
  
 diff --git a/kpatch-build/lookup.h b/kpatch-build/lookup.h
-index fed3fe9..00b6ccc 100644
+index 6f640fd..daeea73 100644
 --- a/kpatch-build/lookup.h
 +++ b/kpatch-build/lookup.h
 @@ -23,7 +23,8 @@ struct lookup_refsym {
@@ -168,3 +169,4 @@ index fed3fe9..00b6ccc 100644
                          struct lookup_result *result);
 -- 
 2.18.1
+

@@ -1,7 +1,7 @@
-From 7c7f582a9b051c4570a00f215f5534ff0fdfd9a0 Mon Sep 17 00:00:00 2001
+From f162056f0448e676345e3205ef4b190f81b51295 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Thu, 12 Mar 2020 05:10:55 -0400
-Subject: [PATCH 18/21] use orignal reloc for symbols from modules
+Subject: [PATCH 18/23] use original reloc for symbols from modules
 
 symbols exported in a patch will generate a symbol version with
 object module name in Module.symvers, but the symbol is actually
@@ -13,10 +13,10 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
  1 file changed, 1 insertion(+), 3 deletions(-)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 45979d6..7d24c7e 100644
+index 20213a0..457d517 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -3131,10 +3131,8 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -3141,10 +3141,8 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  					if (!strcmp(sym_objname, "vmlinux"))
  						continue;
  
@@ -24,9 +24,10 @@ index 45979d6..7d24c7e 100644
 -						continue;
 -
  					external = 1;
-+                    continue;
++					continue;
  				}
  			}
  			log_debug("lookup for %s @ 0x%016lx len %lu\n",
 -- 
 2.18.1
+

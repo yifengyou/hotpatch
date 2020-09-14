@@ -1,7 +1,7 @@
-From 9233e07a0dfdb3eceb44093feb2e5928a9e391d9 Mon Sep 17 00:00:00 2001
+From c0b20224cf1b081fba152cb4944d762515561d89 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Mon, 2 Mar 2020 04:35:07 -0500
-Subject: [PATCH 19/21] create-diff-object: add jump label support
+Subject: [PATCH 19/23] create-diff-object: add jump label support
 
 This patch processes the __jump_table special section, and
 only the jump_lable used by the changed functions will be
@@ -15,10 +15,10 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
  1 file changed, 1 insertion(+), 46 deletions(-)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 7d24c7e..448911b 100644
+index 457d517..4fa4488 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -2135,7 +2135,6 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
+@@ -2140,7 +2140,6 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
  	struct rela *rela, *safe;
  	char *src, *dest;
  	unsigned int group_size, src_offset, dest_offset, include;
@@ -26,7 +26,7 @@ index 7d24c7e..448911b 100644
  
  	LIST_HEAD(newrelas);
  
-@@ -2175,49 +2174,6 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
+@@ -2180,49 +2179,6 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
  		if (!include)
  			continue;
  
@@ -76,7 +76,7 @@ index 7d24c7e..448911b 100644
  		/*
  		 * Copy all relas in the group.  It's possible that the relas
  		 * aren't sorted (e.g. .rela.fixup), so go through the entire
-@@ -2654,8 +2610,7 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf)
+@@ -2659,8 +2615,7 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf)
  	 * jump labels and enable tracepoints in a patched function.
  	 */
  	list_for_each_entry(sec, &kelf->sections, list) {
@@ -88,3 +88,4 @@ index 7d24c7e..448911b 100644
  			continue;
 -- 
 2.18.1
+

@@ -1,7 +1,7 @@
-From 92bb331ce71cfc33d933ebeabdbe9b5721c0ec75 Mon Sep 17 00:00:00 2001
+From d3665b019100715e41b75493d31d51d602ca056a Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Wed, 26 Feb 2020 07:09:50 -0500
-Subject: [PATCH 02/21] kpatch-build: support build patch for aarch64
+Subject: [PATCH 02/23] kpatch-build: support build patch for aarch64
 
 use R_AARCH64_ABS64 for aarch64
 
@@ -16,17 +16,17 @@ support cross compile for aarch64
 
 Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
- kpatch-build/create-diff-object.c   | 191 +++++++++++++++++++++++++---
- kpatch-build/create-kpatch-module.c |  24 +++-
- kpatch-build/kpatch-build           | 116 ++++++++++++++++-
+ kpatch-build/create-diff-object.c   | 276 ++++++++++++++++++++++------
+ kpatch-build/create-kpatch-module.c |  25 ++-
+ kpatch-build/kpatch-build           | 116 +++++++++++-
  kpatch-build/kpatch-gcc             |   4 +-
- 4 files changed, 306 insertions(+), 29 deletions(-)
+ 4 files changed, 352 insertions(+), 69 deletions(-)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 2707cdb..7a27b58 100644
+index 2707cdb..b161fee 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -76,6 +76,31 @@ enum subsection {
+@@ -76,6 +76,32 @@ enum subsection {
  
  enum loglevel loglevel = NORMAL;
  
@@ -50,6 +50,7 @@ index 2707cdb..7a27b58 100644
 +static unsigned int arch_of_elf(Elf *elf)
 +{
 +	GElf_Ehdr eh;
++
 +	if (!gelf_getehdr(elf, &eh))
 +		ERROR("gelf_getehdr");
 +	return eh.e_machine;
@@ -58,7 +59,7 @@ index 2707cdb..7a27b58 100644
  /*******************
   * Data structures
   * ****************/
-@@ -652,6 +677,67 @@ static int kpatch_line_macro_change_only(struct section *sec)
+@@ -652,6 +678,67 @@ static int kpatch_line_macro_change_only(struct section *sec)
  	return 1;
  }
  #endif
@@ -126,7 +127,7 @@ index 2707cdb..7a27b58 100644
  
  static void kpatch_compare_sections(struct list_head *seclist)
  {
-@@ -667,7 +753,16 @@ static void kpatch_compare_sections(struct list_head *seclist)
+@@ -667,7 +754,16 @@ static void kpatch_compare_sections(struct list_head *seclist)
  
  	/* exclude WARN-only, might_sleep changes */
  	list_for_each_entry(sec, seclist, list) {
@@ -144,7 +145,7 @@ index 2707cdb..7a27b58 100644
  			log_debug("reverting macro / line number section %s status to SAME\n",
  				  sec->name);
  			sec->status = SAME;
-@@ -727,6 +822,8 @@ static void kpatch_compare_correlated_symbol(struct symbol *sym)
+@@ -727,6 +823,8 @@ static void kpatch_compare_correlated_symbol(struct symbol *sym)
  		if ((sym2->sec->twin && sym2->sec->twin->ignore) ||
  		    kpatch_subsection_changed(sym1->sec, sym2->sec))
  			sym->status = CHANGED;
@@ -153,27 +154,45 @@ index 2707cdb..7a27b58 100644
  		else
  			DIFF_FATAL("symbol changed sections: %s", sym1->name);
  	}
-@@ -1302,9 +1399,8 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
+@@ -1302,22 +1400,22 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
  				continue;
  			}
  
 -#ifdef __powerpc64__
  			add_off = 0;
 -#else
-+			if (arch == EM_X86_64) {
- 			if (rela->type == R_X86_64_PC32 ||
- 			    rela->type == R_X86_64_PLT32) {
- 				struct insn insn;
-@@ -1317,7 +1413,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
- 				add_off = 0;
- 			else
- 				continue;
+-			if (rela->type == R_X86_64_PC32 ||
+-			    rela->type == R_X86_64_PLT32) {
+-				struct insn insn;
+-				rela_insn(sec, rela, &insn);
+-				add_off = (unsigned int)((long)insn.next_byte -
+-					  (long)sec->base->data->d_buf -
+-					  rela->offset);
+-			} else if (rela->type == R_X86_64_64 ||
+-				   rela->type == R_X86_64_32S)
+-				add_off = 0;
+-			else
+-				continue;
 -#endif
++			if (arch == EM_X86_64) {
++				if (rela->type == R_X86_64_PC32 ||
++						rela->type == R_X86_64_PLT32) {
++					struct insn insn;
++
++					rela_insn(sec, rela, &insn);
++					add_off = (unsigned int)((long)insn.next_byte -
++							(long)sec->base->data->d_buf -
++							rela->offset);
++				} else if (rela->type == R_X86_64_64 ||
++						rela->type == R_X86_64_32S)
++					add_off = 0;
++				else
++					continue;
 +			}
  
  			/*
  			 * Attempt to replace references to unbundled sections
-@@ -2415,7 +2511,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
+@@ -2415,7 +2513,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
  		/* entries[index].sec */
  		ALLOC_LINK(rela, &karch_sec->rela->relas);
  		rela->sym = sec->secsym;
@@ -182,7 +201,7 @@ index 2707cdb..7a27b58 100644
  		rela->addend = 0;
  		rela->offset = (unsigned int)(index * sizeof(struct kpatch_arch) + \
  			       offsetof(struct kpatch_arch, sec));
-@@ -2423,7 +2519,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
+@@ -2423,7 +2521,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
  		/* entries[index].objname */
  		ALLOC_LINK(rela, &karch_sec->rela->relas);
  		rela->sym = strsym;
@@ -191,7 +210,7 @@ index 2707cdb..7a27b58 100644
  		rela->addend = offset_of_string(&kelf->strings, objname);
  		rela->offset = (unsigned int)(index * sizeof(struct kpatch_arch) + \
  			       offsetof(struct kpatch_arch, objname));
-@@ -2622,7 +2718,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
+@@ -2622,7 +2720,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
  			 */
  			ALLOC_LINK(rela, &relasec->relas);
  			rela->sym = sym;
@@ -200,7 +219,7 @@ index 2707cdb..7a27b58 100644
  			rela->addend = 0;
  			rela->offset = (unsigned int)(index * sizeof(*funcs));
  
-@@ -2632,7 +2728,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
+@@ -2632,7 +2730,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
  			 */
  			ALLOC_LINK(rela, &relasec->relas);
  			rela->sym = strsym;
@@ -209,7 +228,7 @@ index 2707cdb..7a27b58 100644
  			rela->addend = offset_of_string(&kelf->strings, sym->name);
  			rela->offset = (unsigned int)(index * sizeof(*funcs) +
  			               offsetof(struct kpatch_patch_func, name));
-@@ -2643,7 +2739,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
+@@ -2643,7 +2741,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
  			 */
  			ALLOC_LINK(rela, &relasec->relas);
  			rela->sym = strsym;
@@ -218,7 +237,7 @@ index 2707cdb..7a27b58 100644
  			rela->addend = objname_offset;
  			rela->offset = (unsigned int)(index * sizeof(*funcs) +
  			               offsetof(struct kpatch_patch_func,objname));
-@@ -2701,7 +2797,10 @@ static int function_ptr_rela(const struct rela *rela)
+@@ -2701,7 +2799,10 @@ static int function_ptr_rela(const struct rela *rela)
  		rela_toc->addend == (int)rela_toc->sym->sym.st_value &&
  		(rela->type == R_X86_64_32S ||
  		rela->type == R_PPC64_TOC16_HA ||
@@ -230,7 +249,7 @@ index 2707cdb..7a27b58 100644
  }
  
  static int may_need_dynrela(const struct rela *rela)
-@@ -2955,7 +3054,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -2955,7 +3056,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  			/* add rela to fill in ksyms[index].name field */
  			ALLOC_LINK(rela2, &ksym_sec->rela->relas);
  			rela2->sym = strsym;
@@ -239,7 +258,7 @@ index 2707cdb..7a27b58 100644
  			rela2->addend = offset_of_string(&kelf->strings, rela->sym->name);
  			rela2->offset = (unsigned int)(index * sizeof(*ksyms) + \
  					offsetof(struct kpatch_symbol, name));
-@@ -2963,7 +3062,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -2963,7 +3064,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  			/* add rela to fill in ksyms[index].objname field */
  			ALLOC_LINK(rela2, &ksym_sec->rela->relas);
  			rela2->sym = strsym;
@@ -248,7 +267,7 @@ index 2707cdb..7a27b58 100644
  			rela2->addend = offset_of_string(&kelf->strings, sym_objname);
  			rela2->offset = (unsigned int)(index * sizeof(*ksyms) + \
  					offsetof(struct kpatch_symbol, objname));
-@@ -2984,7 +3083,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -2984,7 +3085,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  				ERROR("can't create dynrela for section %s (symbol %s): no bundled or section symbol",
  				      sec->name, rela->sym->name);
  
@@ -257,7 +276,7 @@ index 2707cdb..7a27b58 100644
  			rela2->addend = rela->offset;
  			rela2->offset = (unsigned int)(index * sizeof(*krelas) + \
  					offsetof(struct kpatch_relocation, dest));
-@@ -2992,7 +3091,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -2992,7 +3093,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  			/* add rela to fill in krelas[index].objname field */
  			ALLOC_LINK(rela2, &krela_sec->rela->relas);
  			rela2->sym = strsym;
@@ -266,7 +285,7 @@ index 2707cdb..7a27b58 100644
  			rela2->addend = offset_of_string(&kelf->strings, objname);
  			rela2->offset = (unsigned int)(index * sizeof(*krelas) + \
  				offsetof(struct kpatch_relocation, objname));
-@@ -3000,7 +3099,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+@@ -3000,7 +3101,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
  			/* add rela to fill in krelas[index].ksym field */
  			ALLOC_LINK(rela2, &krela_sec->rela->relas);
  			rela2->sym = ksym_sec_sym;
@@ -275,7 +294,7 @@ index 2707cdb..7a27b58 100644
  			rela2->addend = (unsigned int)(index * sizeof(*ksyms));
  			rela2->offset = (unsigned int)(index * sizeof(*krelas) + \
  				offsetof(struct kpatch_relocation, ksym));
-@@ -3063,7 +3162,7 @@ static void kpatch_create_callbacks_objname_rela(struct kpatch_elf *kelf, char *
+@@ -3063,7 +3164,7 @@ static void kpatch_create_callbacks_objname_rela(struct kpatch_elf *kelf, char *
  			if (!strcmp(callbackp->name, sec->name)) {
  				ALLOC_LINK(rela, &sec->relas);
  				rela->sym = strsym;
@@ -284,24 +303,73 @@ index 2707cdb..7a27b58 100644
  				rela->addend = objname_offset;
  				rela->offset = callbackp->offset;
  				break;
-@@ -3116,6 +3215,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
+@@ -3116,40 +3215,79 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
  		/* add rela in .rela__mcount_loc to fill in function pointer */
  		ALLOC_LINK(rela, &relasec->relas);
  		rela->sym = sym;
+-		rela->type = R_X86_64_64;
+-		rela->addend = 0;
+-		rela->offset = (unsigned int)(index * sizeof(void*));
 +		if (arch == EM_X86_64) {
- 		rela->type = R_X86_64_64;
- 		rela->addend = 0;
- 		rela->offset = (unsigned int)(index * sizeof(void*));
-@@ -3151,6 +3251,40 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
++			rela->type = R_X86_64_64;
++			rela->addend = 0;
++			rela->offset = (unsigned int)(index * sizeof(void *));
  
- 			rela->type = R_X86_64_PC32;
- 		}
+-		/*
+-		 * Modify the first instruction of the function to "callq
+-		 * __fentry__" so that ftrace will be happy.
+-		 */
+-		newdata = malloc(sym->sec->data->d_size);
+-		if (!newdata)
+-			ERROR("malloc");
++			/*
++			 * Modify the first instruction of the function to "callq
++			 * __fentry__" so that ftrace will be happy.
++			 */
++			newdata = malloc(sym->sec->data->d_size);
++			if (!newdata)
++				ERROR("malloc");
+ 
+-		memcpy(newdata, sym->sec->data->d_buf, sym->sec->data->d_size);
+-		sym->sec->data->d_buf = newdata;
+-		insn = newdata;
++			memcpy(newdata, sym->sec->data->d_buf, sym->sec->data->d_size);
++			sym->sec->data->d_buf = newdata;
++			insn = newdata;
+ 
+-		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
++			rela = list_first_entry(&sym->sec->rela->relas, struct rela,
+ 					list);
+ 
+-		/*
+-		 * R_X86_64_NONE is only generated by older versions of kernel/gcc
+-		 * which use the mcount script.
+-		 */
+-		if (rela->type == R_X86_64_NONE) {
+-			if (insn[0] != 0xf)
++			/*
++			 * R_X86_64_NONE is only generated by older versions of kernel/gcc
++			 * which use the mcount script.
++			 */
++			if (rela->type == R_X86_64_NONE) {
++				if (insn[0] != 0xf)
++					ERROR("%s: unexpected instruction at the start of the function",
++							sym->name);
++				insn[0] = 0xe8;
++				insn[1] = 0;
++				insn[2] = 0;
++				insn[3] = 0;
++				insn[4] = 0;
++
++				rela->type = R_X86_64_PC32;
++			}
 +		} else if (arch == EM_AARCH64) {
 +			unsigned int *insnp;
++
 +			rela->type = R_AARCH64_ABS64;
 +			/* bl <__fentry__> is the second insn */
 +			rela->addend = 4;
-+			rela->offset = (unsigned int)(index * sizeof(void*));
++			rela->offset = (unsigned int)(index * sizeof(void *));
 +
 +			newdata = malloc(sym->sec->data->d_size);
 +			if (!newdata)
@@ -313,11 +381,22 @@ index 2707cdb..7a27b58 100644
 +
 +			/*
 +			 * mov x9, x30
-+			 * nop //function in .text.<func>, so it be replaced with nop by recordmcount
-+			 * mov x30, x9 
++			 * nop //function in .text.<func>, so it be replaced with nop by
++			 *		 recordmcount
++			 *
++			 * mov x30, x9
 +			 */
-+			if (insnp[0] != 0xaa1e03e9 || insnp[1] != 0xd503201f || insnp[2] != 0xaa0903fe)
-+				ERROR("%s: unexpected instruction at the start of the function",
++			if (insnp[0] != 0xaa1e03e9 || insnp[1] != 0xd503201f
++					|| insnp[2] != 0xaa0903fe)
+ 				ERROR("%s: unexpected instruction at the start of the function",
+-				      sym->name);
+-			insn[0] = 0xe8;
+-			insn[1] = 0;
+-			insn[2] = 0;
+-			insn[3] = 0;
+-			insn[4] = 0;
+-
+-			rela->type = R_X86_64_PC32;
 +						sym->name);
 +
 +			/* change the nop to bl __fentry__ */
@@ -329,11 +408,10 @@ index 2707cdb..7a27b58 100644
 +
 +		} else {
 +			ERROR("unsupport arch %d\n", arch);
-+		}
+ 		}
  
  		index++;
- 	}
-@@ -3349,6 +3483,8 @@ int main(int argc, char *argv[])
+@@ -3349,6 +3489,8 @@ int main(int argc, char *argv[])
  	char *hint = NULL, *orig_obj, *patched_obj, *parent_name;
  	char *parent_symtab, *mod_symvers, *patch_name, *output_obj;
  	struct sym_compare_type *base_locals, *sym_comp;
@@ -342,7 +420,7 @@ index 2707cdb..7a27b58 100644
  
  	arguments.debug = 0;
  	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
-@@ -3369,6 +3505,13 @@ int main(int argc, char *argv[])
+@@ -3369,6 +3511,13 @@ int main(int argc, char *argv[])
  
  	kelf_base = kpatch_elf_open(orig_obj);
  	kelf_patched = kpatch_elf_open(patched_obj);
@@ -356,7 +434,7 @@ index 2707cdb..7a27b58 100644
  
  	kpatch_compare_elf_headers(kelf_base->elf, kelf_patched->elf);
  	kpatch_check_program_headers(kelf_base->elf);
-@@ -3407,7 +3550,12 @@ int main(int argc, char *argv[])
+@@ -3407,7 +3556,12 @@ int main(int argc, char *argv[])
  	 */
  	kpatch_mark_ignored_sections(kelf_patched);
  	kpatch_compare_correlated_elements(kelf_patched);
@@ -370,7 +448,7 @@ index 2707cdb..7a27b58 100644
  	kpatch_elf_teardown(kelf_base);
  	kpatch_elf_free(kelf_base);
  
-@@ -3467,7 +3615,14 @@ int main(int argc, char *argv[])
+@@ -3467,7 +3621,13 @@ int main(int argc, char *argv[])
  	kpatch_create_callbacks_objname_rela(kelf_out, parent_name);
  	kpatch_build_strings_section_data(kelf_out);
  
@@ -378,19 +456,18 @@ index 2707cdb..7a27b58 100644
 +	gcc_add_option = getenv("GCC_ADD_OPTION");
 +	if (gcc_add_option)
 +		mlongcall = strstr(gcc_add_option, "-mlong-calls");
-+	if (arch == EM_AARCH64 && mlongcall) {
++	if (arch == EM_AARCH64 && mlongcall)
 +		printf("-mlong-calls found, no need to create mcount section\n");
-+	} else {
++	else
 +		kpatch_create_mcount_sections(kelf_out);
-+	}
  
  	/*
  	 *  At this point, the set of output sections and symbols is
 diff --git a/kpatch-build/create-kpatch-module.c b/kpatch-build/create-kpatch-module.c
-index 3d197a7..758630b 100644
+index 3d197a7..e8a235d 100644
 --- a/kpatch-build/create-kpatch-module.c
 +++ b/kpatch-build/create-kpatch-module.c
-@@ -31,6 +31,17 @@
+@@ -31,6 +31,18 @@
  char *childobj;
  enum loglevel loglevel = NORMAL;
  
@@ -400,6 +477,7 @@ index 3d197a7..758630b 100644
 +static unsigned int arch_of_elf(Elf *elf)
 +{
 +	GElf_Ehdr eh;
++
 +	if (!gelf_getehdr(elf, &eh))
 +		ERROR("gelf_getehdr");
 +	return eh.e_machine;
@@ -408,7 +486,7 @@ index 3d197a7..758630b 100644
  /*
   * Create .kpatch.dynrelas from .kpatch.relocations and .kpatch.symbols sections
   *
-@@ -102,14 +113,14 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
+@@ -102,14 +114,14 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
  		/* dest */
  		ALLOC_LINK(rela, &dynsec->rela->relas);
  		rela->sym = sym;
@@ -425,7 +503,7 @@ index 3d197a7..758630b 100644
  		rela->addend = name_offset;
  		rela->offset = (unsigned int)(index * sizeof(*dynrelas) + \
  					      offsetof(struct kpatch_patch_dynrela, name));
-@@ -117,7 +128,7 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
+@@ -117,7 +129,7 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
  		/* objname */
  		ALLOC_LINK(rela, &dynsec->rela->relas);
  		rela->sym = strsec->secsym;
@@ -434,7 +512,7 @@ index 3d197a7..758630b 100644
  		rela->addend = objname_offset;
  		rela->offset = (unsigned int)(index * sizeof(*dynrelas) + \
  					      offsetof(struct kpatch_patch_dynrela, objname));
-@@ -200,6 +211,13 @@ int main(int argc, char *argv[])
+@@ -200,6 +212,13 @@ int main(int argc, char *argv[])
  	childobj = basename(arguments.args[0]);
  
  	kelf = kpatch_elf_open(arguments.args[0]);
@@ -663,3 +741,4 @@ index 9663290..35d7c1c 100755
  			obj="$2"
 -- 
 2.18.1
+

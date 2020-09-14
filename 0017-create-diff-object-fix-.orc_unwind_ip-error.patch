@@ -1,7 +1,7 @@
-From 9fa4a3a0a62a383e635ea7de631176a4513f6db9 Mon Sep 17 00:00:00 2001
+From a1d89dc3ab47d443e879d4553a9ff80e8b82a3ab Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Thu, 27 Feb 2020 15:36:55 -0500
-Subject: [PATCH 17/21] create-diff-object: fix .orc_unwind_ip error
+Subject: [PATCH 17/23] create-diff-object: fix .orc_unwind_ip error
 
 error: .orc_unwind_ip section header details
 differ from .orc_unwind_ip
@@ -14,10 +14,10 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
  1 file changed, 6 insertions(+)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 495cce1..45979d6 100644
+index bc3685b..20213a0 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -972,6 +972,9 @@ static void kpatch_correlate_sections(struct list_head *seclist1, struct list_he
+@@ -975,6 +975,9 @@ static void kpatch_correlate_sections(struct list_head *seclist1, struct list_he
  					continue;
  			}
  
@@ -27,7 +27,7 @@ index 495cce1..45979d6 100644
  			kpatch_correlate_section(sec1, sec2);
  			break;
  		}
-@@ -1017,6 +1020,9 @@ static void kpatch_correlate_symbols(struct list_head *symlist1, struct list_hea
+@@ -1020,6 +1023,9 @@ static void kpatch_correlate_symbols(struct list_head *symlist1, struct list_hea
  			    sym1->sec->twin != sym2->sec)
  				continue;
  
@@ -39,3 +39,4 @@ index 495cce1..45979d6 100644
  		}
 -- 
 2.18.1
+
