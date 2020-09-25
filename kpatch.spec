@@ -1,14 +1,12 @@
-%global raw_version 0.9.1
-
 Name:           kpatch
 Epoch:          1
-Version:        %{raw_version}
-Release:        4
+Version:        0.9.1
+Release:        5
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
 URL:            https://github.com/dynup/kpatch
-Source0:        https://github.com/dynup/kpatch/archive/%{name}-%{raw_version}.tar.gz
+Source0:        https://github.com/dynup/kpatch/archive/v%{version}.tar.gz#/%{name}-%{version}.tar.gz
 
 Source1:        os_hotpatch
 Source2:        livepatch
@@ -38,7 +36,7 @@ Patch0021:0021-kpatch-build-don-t-copy-.config-for-out-of-tree-modu.patch
 Patch0022:0022-support-force-enable-disable-for-x86.patch
 Patch0023:0023-create-diff-object-fix-duplicate-symbols-for-vmlinux.patch
 
-BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel kernel-devel git
+BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel-devel git
 Requires:       bc
 
 %description
@@ -58,7 +56,7 @@ Dynamic kernel patching
 %package_help
 
 %prep
-%autosetup -n %{name}-%{raw_version} -p1 -Sgit
+%autosetup -n %{name}-%{version} -p1 -Sgit
 
 %build
 export CFLAGS="$RPM_OPT_FLAGS" LDFLAGS="$RPM_LD_FLAGS"
@@ -95,6 +93,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Fri Sep 25 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-5
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:update Source0
+
 * Sat Sep 12 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-4
 - Type:enhancement
 - ID:NA
