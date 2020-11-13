@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        6
+Release:        7
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -35,6 +35,7 @@ Patch0020:0020-kpatch-build-add-compile-flag-fno-reorder-functions.patch
 Patch0021:0021-kpatch-build-don-t-copy-.config-for-out-of-tree-modu.patch
 Patch0022:0022-support-force-enable-disable-for-x86.patch
 Patch0023:0023-create-diff-object-fix-duplicate-symbols-for-vmlinux.patch
+Patch0024:0024-optimize-for-out-of-tree-module.patch
 
 BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel-devel git
 Requires:       bc
@@ -94,7 +95,13 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
-* Thu Nov 22 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-6
+* Tue Nov 17 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-7
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:optimize for out of tree module
+
+* Thu Nov 12 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-6
 - Type:enhancement
 - ID:NA
 - SUG:NA
