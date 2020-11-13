@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        5
+Release:        6
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -38,6 +38,7 @@ Patch0023:0023-create-diff-object-fix-duplicate-symbols-for-vmlinux.patch
 
 BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel-devel git
 Requires:       bc
+Recommends:     %{name}-help = %{version}-%{release}
 
 %description
 kpatch is a Linux dynamic kernel patching infrastructure which allows you to patch
@@ -93,6 +94,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Thu Nov 22 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-6
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:add help package Recommends
+
 * Fri Sep 25 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-5
 - Type:enhancement
 - ID:NA
