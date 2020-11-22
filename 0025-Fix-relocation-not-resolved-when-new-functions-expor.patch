@@ -1,0 +1,129 @@
+From 737ab3efcde45cde5fbe43ee977fc18b6912f356 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Sun, 22 Nov 2020 21:40:39 +0800
+Subject: [PATCH] Fix relocation not resolved when new functions exported only
+
+When no functions changed and new functions exported, kobject is not
+created, so livepatch will not call klp_init_object and relocation
+in new functions are not resolved.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kmod/patch/kpatch-patch.h         |  4 ++++
+ kmod/patch/kpatch.lds.S           |  6 ++++++
+ kmod/patch/livepatch-patch-hook.c | 19 +++++++++++++++++++
+ kpatch-build/create-diff-object.c | 24 ++++++++++++++++++++++++
+ 4 files changed, 53 insertions(+)
+
+diff --git a/kmod/patch/kpatch-patch.h b/kmod/patch/kpatch-patch.h
+index 6e39364..33f2056 100644
+--- a/kmod/patch/kpatch-patch.h
++++ b/kmod/patch/kpatch-patch.h
+@@ -63,6 +63,10 @@ struct kpatch_post_unpatch_callback {
+ 	void (*callback)(void *obj);
+ 	char *objname;
+ };
++struct kpatch_object {
++	char *objname;
++};
+ 
+ extern unsigned long __kpatch_force_funcs[], __kpatch_force_funcs_end[];
++extern struct kpatch_object __kpatch_objects[], __kpatch_objects_end[];
+ #endif /* _KPATCH_PATCH_H_ */
+diff --git a/kmod/patch/kpatch.lds.S b/kmod/patch/kpatch.lds.S
+index bc5de82..4c4d77b 100644
+--- a/kmod/patch/kpatch.lds.S
++++ b/kmod/patch/kpatch.lds.S
+@@ -47,4 +47,10 @@ SECTIONS
+     __kpatch_force_funcs_end = . ;
+     QUAD(0);
+   }
++  .kpatch.objects : {
++    __kpatch_objects = . ;
++    *(.kpatch.objects)
++    __kpatch_objects_end = . ;
++    QUAD(0);
++  }
+ }
+diff --git a/kmod/patch/livepatch-patch-hook.c b/kmod/patch/livepatch-patch-hook.c
+index 5a0de7f..d3fb1db 100644
+--- a/kmod/patch/livepatch-patch-hook.c
++++ b/kmod/patch/livepatch-patch-hook.c
+@@ -249,6 +249,22 @@ static int patch_is_func_forced(unsigned long addr)
+ 	return 0;
+ }
+ 
++static int add_kpatch_objects(void)
++{
++	struct kpatch_object *p_kpatch_object;
++	struct patch_object *object;
++
++	for (p_kpatch_object = __kpatch_objects;
++	     p_kpatch_object < __kpatch_objects_end;
++	     p_kpatch_object++) {
++		object = patch_find_object_by_name(p_kpatch_object->objname);
++		if (!object)
++			return -ENOMEM;
++	}
++
++	return 0;
++}
++
+ 
+ #ifdef HAVE_CALLBACKS
+ static int add_callbacks_to_patch_objects(void)
+@@ -382,6 +398,9 @@ static int __init patch_init(void)
+ 	if (ret)
+ 		goto out;
+ 
++	ret = add_kpatch_objects();
++	if (ret)
++		goto out;
+ 	/* past this point, only possible return code is -ENOMEM */
+ 	ret = -ENOMEM;
+ 
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index fca68b8..bea758e 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -2553,6 +2553,27 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
+ 	karch_sec->sh.sh_size = karch_sec->data->d_size;
+ }
+ 
++static void kpatch_create_kpatch_object_section(struct kpatch_elf *kelf, char *objname)
++{
++	struct symbol *strsym;
++	struct rela *rela;
++	struct section *kobj_sec;
++
++	kobj_sec = create_section_pair(kelf, ".kpatch.objects", sizeof(struct kpatch_object), 1);
++
++	/* lookup strings symbol */
++	strsym = find_symbol_by_name(&kelf->symbols, ".kpatch.strings");
++	if (!strsym)
++		ERROR("can't find .kpatch.strings symbol");
++
++	/* entries[index].objname */
++	ALLOC_LINK(rela, &kobj_sec->rela->relas);
++	rela->sym = strsym;
++	rela->type = absolute_rela_type;
++	rela->addend = offset_of_string(&kelf->strings, objname);
++	rela->offset = (unsigned int)(offsetof(struct kpatch_object, objname));
++}
++
+ static void kpatch_process_special_sections(struct kpatch_elf *kelf)
+ {
+ 	struct special_section *special;
+@@ -3710,6 +3731,9 @@ int main(int argc, char *argv[])
+ 	kpatch_create_intermediate_sections(kelf_out, lookup, parent_name, patch_name);
+ 	kpatch_create_kpatch_arch_section(kelf_out, parent_name);
+ 	kpatch_create_callbacks_objname_rela(kelf_out, parent_name);
++	if (!num_changed && new_globals_exist) {
++		kpatch_create_kpatch_object_section(kelf_out, parent_name);                                                                        
++	}
+ 	kpatch_build_strings_section_data(kelf_out);
+ 
+ 	gcc_add_option = getenv("GCC_ADD_OPTION");
+-- 
+2.18.1
+
