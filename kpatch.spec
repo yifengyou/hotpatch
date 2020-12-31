@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        7
+Release:        8
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -36,6 +36,7 @@ Patch0021:0021-kpatch-build-don-t-copy-.config-for-out-of-tree-modu.patch
 Patch0022:0022-support-force-enable-disable-for-x86.patch
 Patch0023:0023-create-diff-object-fix-duplicate-symbols-for-vmlinux.patch
 Patch0024:0024-optimize-for-out-of-tree-module.patch
+Patch0025:0025-Fix-relocation-not-resolved-when-new-functions-expor.patch
 
 BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel-devel git
 Requires:       bc
@@ -95,6 +96,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Sun Nov 22 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-8
+- Type:bugfix
+- ID:NA
+- SUG:NA
+- DESC:Fix relocation not resolved when new functions exported only
+
 * Tue Nov 17 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-7
 - Type:enhancement
 - ID:NA
