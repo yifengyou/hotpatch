@@ -1,0 +1,110 @@
+From 0e08aa99583573953367d5c1ec21901325c7faee Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Wed, 30 Dec 2020 21:13:10 -0500
+Subject: [PATCH] support remove static variables using KPATCH_IGNORE_STATIC
+
+Static variables will be removed due to compiler optimization.
+And some static variables can be treated as new variables, such as
+static variables in print limit macros. So add KPATCH_IGNORE_STATIC
+to tell kpatch to treat the static variables as new variables.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kmod/patch/kpatch-macros.h        |  3 +++
+ kpatch-build/create-diff-object.c | 45 ++++++++++++++++++++++++++++++-
+ 2 files changed, 47 insertions(+), 1 deletion(-)
+
+diff --git a/kmod/patch/kpatch-macros.h b/kmod/patch/kpatch-macros.h
+index a60a267..9a30d68 100644
+--- a/kmod/patch/kpatch-macros.h
++++ b/kmod/patch/kpatch-macros.h
+@@ -5,6 +5,9 @@
+ #include <linux/jiffies.h>
+ #include <linux/version.h>
+ 
++#define KPATCH_IGNORE_STATIC(_static) \
++	char *__UNIQUE_ID(kpatch_ignore_static_) __section(.kpatch.ignore.statics) = _static;
++
+ /*
+  * KPATCH_IGNORE_SECTION macro
+  *
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index a2a9cab..211ea72 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -1151,6 +1151,40 @@ static int kpatch_is_normal_static_local(struct symbol *sym)
+ 	return 1;
+ }
+ 
++static int kpatch_mark_ignored_statics(struct kpatch_elf *kelf, struct symbol *sym)
++{
++	struct section *sec, *strsec;
++	struct rela *rela;
++	char *name;
++
++	sec = find_section_by_name(&kelf->sections, ".kpatch.ignore.statics");
++	if (!sec)
++		return 0;
++
++	list_for_each_entry(rela, &sec->rela->relas, list) {
++		strsec = rela->sym->sec;
++		strsec->status = CHANGED;
++		/*
++		 * Include the string section here.  This is because the
++		 * KPATCH_IGNORE_STATIC() macro is passed a literal string
++		 * by the patch author, resulting in a change to the string
++		 * section.  If we don't include it, then we will potentially
++		 * get a "changed section not included" error in
++		 * kpatch_verify_patchability() if no other function based change
++		 * also changes the string section.  We could try to exclude each
++		 * literal string added to the section by KPATCH_IGNORE_STATIC()
++		 * from the section data comparison, but this is a simpler way.
++		 */
++		strsec->include = 1;
++		strsec->secsym->include = 1;
++		name = strsec->data->d_buf + rela->addend;
++		if (!strncmp(name, sym->name, strlen(name)))
++			return 1;
++	}
++
++	return 0;
++}
++
+ /*
+  * gcc renames static local variables by appending a period and a number.  For
+  * example, __foo could be renamed to __foo.31452.  Unfortunately this number
+@@ -1230,6 +1264,11 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
+ 			if (sym->twin)
+ 				continue;
+ 
++			if (kpatch_mark_ignored_statics(patched, sym)) {
++				log_normal("KPATCH_IGNORE_STATIC:ignore static variable %s\n", sym->name);
++				continue;
++			}
++
+ 			bundled = sym == sym->sec->sym;
+ 			if (bundled && sym->sec == sec->base) {
+ 				/*
+@@ -1286,6 +1325,11 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
+ 			if (!kpatch_is_normal_static_local(sym))
+ 				continue;
+ 
++			if (kpatch_mark_ignored_statics(patched, sym)) {
++				log_normal("KPATCH_IGNORE_STATIC:ignore static variable %s\n", sym->name);
++				continue;
++			}
++
+ 			if (!sym->twin || !sec->twin)
+ 				DIFF_FATAL("reference to static local variable %s in %s was removed",
+ 					   sym->name,
+@@ -1329,7 +1373,6 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
+ 			log_normal("WARNING: unable to correlate static local variable %s used by %s, assuming variable is new\n",
+ 				   sym->name,
+ 				   kpatch_section_function_name(sec));
+-			return;
+ 		}
+ 	}
+ }
+-- 
+2.18.1
+
