@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        8
+Release:        9
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -37,6 +37,7 @@ Patch0022:0022-support-force-enable-disable-for-x86.patch
 Patch0023:0023-create-diff-object-fix-duplicate-symbols-for-vmlinux.patch
 Patch0024:0024-optimize-for-out-of-tree-module.patch
 Patch0025:0025-Fix-relocation-not-resolved-when-new-functions-expor.patch
+Patch0026:0026-support-remove-static-variables-using-KPATCH_IGNORE_.patch
 
 BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel-devel git
 Requires:       bc
@@ -96,6 +97,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Wed Dec 31 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-9
+- Type:bugfix
+- ID:NA
+- SUG:NA
+- DESC:support remove static variables using KPATCH_IGNORE_STATIC
+
 * Sun Nov 22 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-8
 - Type:bugfix
 - ID:NA
