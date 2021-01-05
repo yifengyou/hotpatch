@@ -592,7 +592,14 @@ function fn_makepatch()
     export USERMODFLAGS=`cat $G_KPATCH_FLAGS`
     export NO_PROFILING_CALLS="yes"
     export DISABLE_AFTER_LOAD="yes"
-    kpatch-build -s $G_PATCH_SRC -c $G_KERNEL_CONFIG -v $G_VMLINUX --skip-gcc-check -n "${G_PREFIX}_${G_HOTPATCH_ID}" $G_DEBUG_INFO $G_PATCHFILE
+    UNAME_R=$(uname -r)
+    UNAME_R_ARCH=${UNAME_R##*.}
+    SKIP_GCC_CHECK=""
+    if [[ "${UNAME_R_ARCH}" != "$(uname -p)" ]];then
+            echo "build in cross compile environment, skip gcc check"
+            SKIP_GCC_CHECK="--skip-gcc-check"
+    fi
+    kpatch-build -s $G_PATCH_SRC -c $G_KERNEL_CONFIG -v $G_VMLINUX ${SKIP_GCC_CHECK} -n "${G_PREFIX}_${G_HOTPATCH_ID}" $G_DEBUG_INFO $G_PATCHFILE
     l_ret=$?
     cd - &>/dev/null
     if [ $l_ret -eq 0 ] && [ -f "$G_TMP_DIR/$G_HOTPATCH" ];then

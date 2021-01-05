@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        9
+Release:        10
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -97,8 +97,14 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
-* Wed Dec 31 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-9
-- Type:bugfix
+* Tue Jan 5 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-10
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:only skip gcc check in cross compile environment
+
+* Thu Dec 31 2020 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-9
+- Type:enhancement
 - ID:NA
 - SUG:NA
 - DESC:support remove static variables using KPATCH_IGNORE_STATIC
@@ -206,7 +212,7 @@ popd
 - SUG:restart
 - DESC:add security compile flags
 
-* Tue Sep 27 2019 Zhipeng Xie<xiezhipeng1@huawei.com> - 2.0-3.1.17
+* Fri Sep 27 2019 Zhipeng Xie<xiezhipeng1@huawei.com> - 2.0-3.1.17
 - Type:enhancement
 - ID:NA
 - SUG:restart
@@ -230,7 +236,7 @@ popd
 - SUG:NA
 - DESC:rewrite spec
 
-* Fri Jul 16 2019 yangbin<robin.yb@huawei.com> - 2.0-3.1.13
+* Tue Jul 16 2019 yangbin<robin.yb@huawei.com> - 2.0-3.1.13
 - Type:enhancement
 - ID:NA
 - SUG:restart
