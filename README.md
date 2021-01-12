@@ -154,3 +154,13 @@ livepatch -d cmdline
 livepatch -r cmdline
 ```
 
+## 编译更新补丁工具
+
+```bash
+yum install -y git rpm-build elfutils-libelf-devel uname-build-checks gdb-headless
+git clone https://gitee.com/src-openeuler/kpatch.git
+mkdir -p ~/rpmbuild/SOURCES/
+/bin/cp kpatch/* ~/rpmbuild/SOURCES/
+rpmbuild -ba kpatch/kpatch.spec
+rpm -Uvh ~/rpmbuild/RPMS/`arch`/kpatch*.rpm
+```
