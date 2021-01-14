@@ -5,11 +5,17 @@ openEuler内核热补丁使用指南
 
 openEuler 20.03 LTS及以上版本
 
-架构支持：
+openEuler社区已经验证支持内核热补丁的架构：
 
 - [x] x86_64
-- [x] aarch64
+- [x] arm64
+- [ ] ppc64le
+- [ ] s390
 - [ ] risc-v
+
+上游社区：
+
+https://github.com/dynup/kpatch
 
 ## 环境准备
 
