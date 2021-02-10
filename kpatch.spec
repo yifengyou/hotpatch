@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        11
+Release:        12
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -97,6 +97,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Wed Feb 10 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-12
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:modify hotpatch id length limit from 20 to 32
+
 * Mon Jan 11 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-11
 - Type:enhancement
 - ID:NA
