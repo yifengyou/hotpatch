@@ -154,7 +154,7 @@ function fn_check_reg_char()
 function fn_check_id()
 {
     local l_id=$1
-    fn_check_reg_char "$l_id" "20" "-_"
+    fn_check_reg_char "$l_id" "32" "-_"
     if [ $? -ne 0 ];then
         echo "error: check hotpatch id failed"
         return 1
