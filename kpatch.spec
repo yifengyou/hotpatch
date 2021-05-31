@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        12
+Release:        13
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -38,6 +38,7 @@ Patch0023:0023-create-diff-object-fix-duplicate-symbols-for-vmlinux.patch
 Patch0024:0024-optimize-for-out-of-tree-module.patch
 Patch0025:0025-Fix-relocation-not-resolved-when-new-functions-expor.patch
 Patch0026:0026-support-remove-static-variables-using-KPATCH_IGNORE_.patch
+Patch0027:0027-create-build-diff-support-for-.cold-functions-with-n.patch
 
 BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel-devel git
 Requires:       bc make gcc patch bison flex openssl-devel
@@ -97,6 +98,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Sat May 29 2021 Wentao Fan<fanwentao@huawei.com> -1:0.9.1-13
+- Type:bugfix
+- ID:NA
+- SUG:NA
+- DESC:support for .cold functions with no id suffix
+
 * Wed Feb 10 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-12
 - Type:enhancement
 - ID:NA
