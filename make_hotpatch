@@ -326,20 +326,20 @@ function fn_verify_input()
     if [ -z "`echo "$input_param" | grep -w "\-i"`" \
         -a -z "`echo $input_param | grep -w "\-\-id"`" \
         -a $# -gt 1 ];then
-    echo "error: missing param -i or --id"
-    fn_do_clean
-    fn_usage
-    exit 1
-fi
-if [ -z "`echo "$input_param" | grep -w "\-d"`" \
-    -a -z "`echo $input_param | grep -w "\-\-diffext"`" \
-    -a -z "`echo $input_param | grep -w "\-p"`" \
-    -a -z "`echo $input_param | grep -w "\-\-patch"`" \
-    -a $# -gt 1 ];then
-echo "error: missing param -d,--diffext or -p,--patch"
-fn_do_clean
-fn_usage
-exit 1
+        echo "error: missing param -i or --id"
+        fn_do_clean
+        fn_usage
+        exit 1
+    fi
+    if [ -z "`echo "$input_param" | grep -w "\-d"`" \
+        -a -z "`echo $input_param | grep -w "\-\-diffext"`" \
+        -a -z "`echo $input_param | grep -w "\-p"`" \
+        -a -z "`echo $input_param | grep -w "\-\-patch"`" \
+        -a $# -gt 1 ];then
+        echo "error: missing param -d,--diffext or -p,--patch"
+        fn_do_clean
+        fn_usage
+        exit 1
     fi
 
     while [ $# -ge 1 ]; do
