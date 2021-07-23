@@ -1,0 +1,62 @@
+From b381a0cc0b900d042ff6a718ef9795101310d702 Mon Sep 17 00:00:00 2001
+From: Kamalesh Babulal <kamalesh@linux.vnet.ibm.com>
+Date: Wed, 17 Jun 2020 19:51:56 +0530
+Subject: [PATCH] lookup: Add __UNIQUE_ID_ to maybe_discarded_sym list
+
+Linux kernel tristate config options allows selected feature, either to
+be built-in to the kernel or to be built as a kernel module. When built
+as a kernel module, it's expected that the module, will be built with
+module information such as author, license, description and others.
+
+For each of the modinfo, a corresponding __UNIQUE_ID_ symbol is
+generated.  Their lookup succeeds in the case of module but fails when
+selected to built-in to the kernel, the reason being that the kernel
+discards these __UNIQUE_ID_ symbols during linking. Add __UNIQUE_ID_
+symbols to maybe_discarded_sym list, to avoid failure in case of
+table->object is vmlinux.
+
+i.e.:
+ # cat .config|grep IOSCHED_BFQ (can be compiled as module too)
+ CONFIG_IOSCHED_BFQ=y
+
+ # readelf -sW ./block/bfq-iosched.o|grep UNIQUE
+   219: 0000000000000000    54 OBJECT  LOCAL  DEFAULT  267 __UNIQUE_ID_description223
+   220: 0000000000000036    16 OBJECT  LOCAL  DEFAULT  267 __UNIQUE_ID_license222
+   221: 0000000000000046    19 OBJECT  LOCAL  DEFAULT  267 __UNIQUE_ID_file221
+   222: 0000000000000059    25 OBJECT  LOCAL  DEFAULT  267 __UNIQUE_ID_author220
+   223: 0000000000000072    22 OBJECT  LOCAL  DEFAULT  267 __UNIQUE_ID_alias219
+
+the line below before the kpatch error, is a debug printf to find the failing lookup symbol:
+Failed lookup for __UNIQUE_ID_description223
+/root/kpatch/kpatch-build/create-diff-object: ERROR: bfq-iosched.o: find_local_syms: 180: couldn't find matching bfq-iosched.c local symbols in ./vmlinux symbol table
+
+with the patch, it successfully builds with both y/m config options:
+...
+bfq-iosched.o: changed function: bfq_idle_slice_timer
+Patched objects: vmlinux
+Building patch module:
+livepatch-0001-block-bfq-fix-use-after-free-in-b.ko
+SUCCESS
+
+Signed-off-by: Kamalesh Babulal <kamalesh@linux.vnet.ibm.com>
+---
+ kpatch-build/lookup.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/kpatch-build/lookup.c b/kpatch-build/lookup.c
+index 4f8c779..9086c9c 100644
+--- a/kpatch-build/lookup.c
++++ b/kpatch-build/lookup.c
+@@ -83,7 +83,8 @@ static int maybe_discarded_sym(const char *name)
+ 	if (!strncmp(name, "__exitcall_", 11) ||
+ 	    !strncmp(name, "__brk_reservation_fn_", 21) ||
+ 	    !strncmp(name, "__func_stack_frame_non_standard_", 32) ||
+-	    !strncmp(name, "__addressable_", 14))
++	    !strncmp(name, "__addressable_", 14) ||
++	    !strncmp(name, "__UNIQUE_ID_", 12))
+ 		return 1;
+ 
+ 	return 0;
+-- 
+2.27.0
+
