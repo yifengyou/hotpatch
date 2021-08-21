@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        15
+Release:        16
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -40,6 +40,7 @@ Patch0025:0025-Fix-relocation-not-resolved-when-new-functions-expor.patch
 Patch0026:0026-support-remove-static-variables-using-KPATCH_IGNORE_.patch
 Patch0027:0027-create-build-diff-support-for-.cold-functions-with-n.patch
 Patch0028:0028-lookup-Add-__UNIQUE_ID_-to-maybe_discarded_sym-list.patch
+Patch0029:0029-create-diff-object-error-on-detect-new-changed-ALTIN.patch
 
 BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel-devel git
 Requires:       bc make gcc patch bison flex openssl-devel
@@ -100,7 +101,13 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
-* Fri Jul 23 2021 Xinpeng Liu<liuxp11@chinatelecom.cn> -1:0.9.1-15
+* Sat Aug 21 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-16
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:create-diff-object: error on detect new/changed ALTINSTR_ENTRY_CB
+
+* Fri Jul 23 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-15
 - Type:enhancement
 - ID:NA
 - SUG:NA
