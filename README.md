@@ -169,4 +169,5 @@ mkdir -p ~/rpmbuild/SOURCES/
 /bin/cp kpatch/* ~/rpmbuild/SOURCES/
 rpmbuild -ba kpatch/kpatch.spec
 rpm -Uvh ~/rpmbuild/RPMS/`arch`/kpatch*.rpm
+rpm -Uvh ~/rpmbuild/RPMS/noarch/kpatch*.rpm
 ```
