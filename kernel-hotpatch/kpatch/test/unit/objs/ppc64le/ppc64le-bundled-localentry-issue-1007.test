@@ -1,0 +1,6 @@
+#!/bin/bash
+source $KPATCH_TEST_LIBRARY
+
+assert_num_funcs 1
+
+readelf -r --wide $1 |grep -q " xs_tcp_state_change + 90"

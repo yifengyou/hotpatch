@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Verify an __mcount_loc relocation for netlbl_catmap_getlong:
+#
+# % objdump -j __mcount_loc -Dr mcount_loc-issue-1102.OUTPUT.o
+#
+# mcount_loc-issue-1102.OUTPUT.o:     file format elf64-x86-64
+#
+#
+# Disassembly of section __mcount_loc:
+#
+# 0000000000000000 <__mcount_loc>:
+# 	...
+# 			0: R_X86_64_64	netlbl_catmap_getlong
+
+rela=$(objdump -j __mcount_loc -Dr mcount_loc-issue-1102.OUTPUT.o 2>/dev/null | \
+       awk '$2=="R_X86_64_64" && $3=="netlbl_catmap_getlong" { print $3 }' 2>/dev/null)
+
+[[ $rela == "netlbl_catmap_getlong" ]] && exit 0
+exit 1

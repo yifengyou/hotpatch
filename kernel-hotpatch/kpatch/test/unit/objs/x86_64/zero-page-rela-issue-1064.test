@@ -1,0 +1,14 @@
+#!/bin/bash
+# Test for https://github.com/dynup/kpatch/issues/1064
+source $KPATCH_TEST_LIBRARY
+
+assert_num_funcs 1
+
+TESTFILE=$(basename "$0")
+OUTFILE=${TESTFILE%.test}.OUTPUT.o
+
+# If the issue #1064 is fixed, 'objdump -r <output_binary.o>' should show
+# R_X86_64_64 relocation like 'empty_zero_page+0x80000000'.
+# If the issue is present, there will be something like
+# 'empty_zero_page-0x80000000' there instead.
+objdump -r ${OUTFILE} | grep -q -E 'R_X86_64_64\s+empty_zero_page\+0x0*80000000'
