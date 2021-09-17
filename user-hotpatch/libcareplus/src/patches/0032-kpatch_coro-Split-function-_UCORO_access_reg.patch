@@ -1,0 +1,196 @@
+From ae9e01aefed4105c808301e783d29ddd349dc0f6 Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Mon, 12 Oct 2020 14:22:45 +0800
+Subject: [PATCH 32/89] kpatch_coro: Split function _UCORO_access_reg
+
+The function _UCORO_access_reg is arch related, so make two
+separate definations in arch/x86/arch_coro.c and arch/aarch64/arch_coro.c
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/arch/aarch64/arch_coro.c | 39 ++++++++++++++++++++++++++++++++
+ src/arch/x86/arch_coro.c     | 43 ++++++++++++++++++++++++++++++++++++
+ src/include/kpatch_coro.h    | 11 +++++++++
+ src/kpatch_coro.c            | 37 -------------------------------
+ 4 files changed, 93 insertions(+), 37 deletions(-)
+
+diff --git a/src/arch/aarch64/arch_coro.c b/src/arch/aarch64/arch_coro.c
+index e69de29..e6fe3d0 100644
+--- a/src/arch/aarch64/arch_coro.c
++++ b/src/arch/aarch64/arch_coro.c
+@@ -0,0 +1,39 @@
++#include <stdio.h>
++#include <string.h>
++#include <stdlib.h>
++#include <libunwind-ptrace.h>
++#include <sys/utsname.h>
++
++#include "include/kpatch_user.h"
++#include "include/kpatch_coro.h"
++#include "include/kpatch_common.h"
++#include "include/kpatch_elf.h"
++#include "include/kpatch_ptrace.h"
++#include "include/kpatch_log.h"
++
++int _UCORO_access_reg(unw_addr_space_t as, unw_regnum_t reg, unw_word_t *val,
++		      int write, void *arg)
++{
++	struct UCORO_info *info = (struct UCORO_info *)arg;
++	unsigned long *regs = (unsigned long *)info->coro->env[0].__jmpbuf;
++
++	if (write) {
++		kperr("_UCORO_access_reg: write is not implemeneted (%d)\n", reg);
++		return -UNW_EINVAL;
++	}
++	switch (reg) {
++		case UNW_AARCH64_X9:
++			*val = regs[JB_RBX]; break;
++		case UNW_AARCH64_X29:
++			*val = regs[JB_RBP]; break;
++		case UNW_AARCH64_X12...UNW_AARCH64_X15:
++			*val = regs[reg - UNW_AARCH64_X12 + JB_R12]; break;
++		case UNW_AARCH64_SP:
++			*val = regs[JB_RSP]; break;
++		case UNW_AARCH64_PC:
++			*val = regs[JB_RIP]; break;
++		default:
++			return _UPT_access_reg(as, reg, val, write, arg);
++	}
++	return 0;
++}
+diff --git a/src/arch/x86/arch_coro.c b/src/arch/x86/arch_coro.c
+index e69de29..ce889df 100644
+--- a/src/arch/x86/arch_coro.c
++++ b/src/arch/x86/arch_coro.c
+@@ -0,0 +1,43 @@
++#include <stdio.h>
++#include <string.h>
++#include <stdlib.h>
++
++#include <libunwind-ptrace.h>
++
++#include <sys/utsname.h>
++
++#include <asm/prctl.h>
++
++#include "include/kpatch_user.h"
++#include "include/kpatch_coro.h"
++#include "include/kpatch_common.h"
++#include "include/kpatch_elf.h"
++#include "include/kpatch_ptrace.h"
++#include "include/kpatch_log.h"
++
++int _UCORO_access_reg(unw_addr_space_t as, unw_regnum_t reg, unw_word_t *val,
++		      int write, void *arg)
++{
++	struct UCORO_info *info = (struct UCORO_info *)arg;
++	unsigned long *regs = (unsigned long *)info->coro->env[0].__jmpbuf;
++
++	if (write) {
++		kperr("_UCORO_access_reg: write is not implemeneted (%d)\n", reg);
++		return -UNW_EINVAL;
++	}
++	switch (reg) {
++		case UNW_X86_64_RBX:
++			*val = regs[JB_RBX]; break;
++		case UNW_X86_64_RBP:
++			*val = regs[JB_RBP]; break;
++		case UNW_X86_64_R12...UNW_X86_64_R15:
++			*val = regs[reg - UNW_X86_64_R12 + JB_R12]; break;
++		case UNW_X86_64_RSP:
++			*val = regs[JB_RSP]; break;
++		case UNW_X86_64_RIP:
++			*val = regs[JB_RIP]; break;
++		default:
++			return _UPT_access_reg(as, reg, val, write, arg);
++	}
++	return 0;
++}
+diff --git a/src/include/kpatch_coro.h b/src/include/kpatch_coro.h
+index 1588b5e..760b1db 100644
+--- a/src/include/kpatch_coro.h
++++ b/src/include/kpatch_coro.h
+@@ -19,6 +19,17 @@ struct kpatch_coro {
+ void *_UCORO_create(struct kpatch_coro *coro, pid_t pid);
+ void _UCORO_destroy(void *arg);
+ 
++
++struct UCORO_info {
++	union {
++		void *upt;
++		char dummy[256];
++	};
++	struct kpatch_coro *coro;
++};
++int _UCORO_access_reg(unw_addr_space_t as, unw_regnum_t reg,
++					unw_word_t *val, int write, void *arg);
++
+ int kpatch_coroutines_init(struct kpatch_process *proc);
+ int kpatch_coroutines_find(struct kpatch_process *proc);
+ void kpatch_coroutines_free(struct kpatch_process *proc);
+diff --git a/src/kpatch_coro.c b/src/kpatch_coro.c
+index 02d421b..83d04ce 100644
+--- a/src/kpatch_coro.c
++++ b/src/kpatch_coro.c
+@@ -6,8 +6,6 @@
+ 
+ #include <sys/utsname.h>
+ 
+-#include <asm/prctl.h>
+-
+ #include "include/kpatch_user.h"
+ #include "include/kpatch_coro.h"
+ #include "include/kpatch_common.h"
+@@ -505,13 +503,6 @@ static struct kpatch_coro_ops kpatch_coro_flavours[] = {
+  *
+  * That's why I had to do this hack
+  */
+-struct UCORO_info {
+-	union {
+-		void *upt;
+-		char dummy[256];
+-	};
+-	struct kpatch_coro *coro;
+-};
+ 
+ void *_UCORO_create(struct kpatch_coro *coro, pid_t pid)
+ {
+@@ -538,34 +529,6 @@ void _UCORO_destroy(void *arg)
+ 	_UPT_destroy(info);
+ }
+ 
+-static int
+-_UCORO_access_reg(unw_addr_space_t as, unw_regnum_t reg, unw_word_t *val,
+-		      int write, void *arg)
+-{
+-	struct UCORO_info *info = (struct UCORO_info *)arg;
+-	unsigned long *regs = (unsigned long *)info->coro->env[0].__jmpbuf;
+-
+-	if (write) {
+-		kperr("_UCORO_access_reg: write is not implemeneted (%d)\n", reg);
+-		return -UNW_EINVAL;
+-	}
+-	switch (reg) {
+-		case UNW_X86_64_RBX:
+-			*val = regs[JB_RBX]; break;
+-		case UNW_X86_64_RBP:
+-			*val = regs[JB_RBP]; break;
+-		case UNW_X86_64_R12...UNW_X86_64_R15:
+-			*val = regs[reg - UNW_X86_64_R12 + JB_R12]; break;
+-		case UNW_X86_64_RSP:
+-			*val = regs[JB_RSP]; break;
+-		case UNW_X86_64_RIP:
+-			*val = regs[JB_RIP]; break;
+-		default:
+-			return _UPT_access_reg(as, reg, val, write, arg);
+-	}
+-	return 0;
+-}
+-
+ static unw_accessors_t _UCORO_accessors = {
+ 	_UPT_find_proc_info,
+ 	_UPT_put_unwind_info,
+-- 
+2.23.0
+

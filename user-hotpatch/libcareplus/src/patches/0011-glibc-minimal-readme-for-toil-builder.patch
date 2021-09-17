@@ -1,0 +1,36 @@
+From 0c0f6387230d6164eaa58ae4a95656539ace5159 Mon Sep 17 00:00:00 2001
+From: Pavel Boldin <pboldin@cloudlinux.com>
+Date: Tue, 30 Jan 2018 16:42:32 +0200
+Subject: [PATCH 11/89] glibc: minimal readme for toil builder
+
+Signed-off-by: Pavel Boldin <pboldin@cloudlinux.com>
+---
+ packages/rhel7/glibc/glibc-2.17-55.el7/README.md | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+ create mode 100644 packages/rhel7/glibc/glibc-2.17-55.el7/README.md
+
+diff --git a/packages/rhel7/glibc/glibc-2.17-55.el7/README.md b/packages/rhel7/glibc/glibc-2.17-55.el7/README.md
+new file mode 100644
+index 0000000..740d294
+--- /dev/null
++++ b/packages/rhel7/glibc/glibc-2.17-55.el7/README.md
+@@ -0,0 +1,16 @@
++Use toil-based build script to build patches for the `glibc`. For that simple
++run::
++
++```shell
++$ LIBCARE_DIR=~/libcare-opensource
++$ pip install -r $LIBCARE_DIR/scripts/toil/requirements.txt
++$ python $LIBCARE_DIR/scripts/toil/pkgbuild.py workdir pkgfile.yaml
++...
++```
++
++This should build the following files:
++```shell
++$ ls /tmp/build.orig-glibc-2.17-55.el7.x86_64.rpm.tgz /tmp/kpatch-glibc-2.17-55.el7.x86_64.tgz
++/tmp/build.orig-glibc-2.17-55.el7.x86_64.rpm.tgz
++/tmp/kpatch-glibc-2.17-55.el7.x86_64.tgz
++```
+-- 
+2.23.0
+

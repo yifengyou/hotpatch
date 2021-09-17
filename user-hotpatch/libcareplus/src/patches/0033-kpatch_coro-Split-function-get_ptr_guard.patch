@@ -1,0 +1,148 @@
+From 612e06f2fc95029c13cfdb684014259fb49f18fe Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Mon, 12 Oct 2020 14:32:51 +0800
+Subject: [PATCH 33/89] kpatch_coro: Split function get_ptr_guard
+
+The function get_ptr_guard is arch related, so make two
+separate definations in arch/x86/arch_coro.c and arch/aarch64/arch_coro.c
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/arch/aarch64/arch_coro.c | 24 ++++++++++++++++++++++++
+ src/arch/x86/arch_coro.c     | 23 +++++++++++++++++++++++
+ src/include/kpatch_coro.h    |  5 +++++
+ src/kpatch_coro.c            | 25 -------------------------
+ 4 files changed, 52 insertions(+), 25 deletions(-)
+
+diff --git a/src/arch/aarch64/arch_coro.c b/src/arch/aarch64/arch_coro.c
+index e6fe3d0..b93581e 100644
+--- a/src/arch/aarch64/arch_coro.c
++++ b/src/arch/aarch64/arch_coro.c
+@@ -11,6 +11,30 @@
+ #include "include/kpatch_ptrace.h"
+ #include "include/kpatch_log.h"
+ 
++int get_ptr_guard(struct kpatch_process *proc,
++			 unsigned long *ptr_guard)
++{
++	int ret;
++	unsigned long tls = 0;
++
++    /*
++	ret = kpatch_arch_prctl_remote(proc2pctx(proc), ARCH_GET_FS, &tls);
++	if (ret < 0) {
++		kpdebug("FAIL. Can't get TLS base value\n");
++		return -1;
++	}*/
++	ret = kpatch_process_mem_read(proc,
++				      tls + GLIBC_TLS_PTR_GUARD,
++				      ptr_guard,
++				      sizeof(*ptr_guard));
++	if (ret < 0) {
++		kpdebug("FAIL. Can't get pointer guard value\n");
++		return -1;
++	}
++
++	return 0;
++}
++
+ int _UCORO_access_reg(unw_addr_space_t as, unw_regnum_t reg, unw_word_t *val,
+ 		      int write, void *arg)
+ {
+diff --git a/src/arch/x86/arch_coro.c b/src/arch/x86/arch_coro.c
+index ce889df..86bf12f 100644
+--- a/src/arch/x86/arch_coro.c
++++ b/src/arch/x86/arch_coro.c
+@@ -15,6 +15,29 @@
+ #include "include/kpatch_ptrace.h"
+ #include "include/kpatch_log.h"
+ 
++int get_ptr_guard(struct kpatch_process *proc,
++			 unsigned long *ptr_guard)
++{
++	int ret;
++	unsigned long tls;
++
++	ret = kpatch_arch_prctl_remote(proc2pctx(proc), ARCH_GET_FS, &tls);
++	if (ret < 0) {
++		kpdebug("FAIL. Can't get TLS base value\n");
++		return -1;
++	}
++	ret = kpatch_process_mem_read(proc,
++				      tls + GLIBC_TLS_PTR_GUARD,
++				      ptr_guard,
++				      sizeof(*ptr_guard));
++	if (ret < 0) {
++		kpdebug("FAIL. Can't get pointer guard value\n");
++		return -1;
++	}
++
++	return 0;
++}
++
+ int _UCORO_access_reg(unw_addr_space_t as, unw_regnum_t reg, unw_word_t *val,
+ 		      int write, void *arg)
+ {
+diff --git a/src/include/kpatch_coro.h b/src/include/kpatch_coro.h
+index 760b1db..272855e 100644
+--- a/src/include/kpatch_coro.h
++++ b/src/include/kpatch_coro.h
+@@ -30,6 +30,11 @@ struct UCORO_info {
+ int _UCORO_access_reg(unw_addr_space_t as, unw_regnum_t reg,
+ 					unw_word_t *val, int write, void *arg);
+ 
++#define GLIBC_TLS_PTR_GUARD 0x30
++int get_ptr_guard(struct kpatch_process *proc,
++					unsigned long *ptr_guard);
++
++
+ int kpatch_coroutines_init(struct kpatch_process *proc);
+ int kpatch_coroutines_find(struct kpatch_process *proc);
+ void kpatch_coroutines_free(struct kpatch_process *proc);
+diff --git a/src/kpatch_coro.c b/src/kpatch_coro.c
+index 83d04ce..ea4050f 100644
+--- a/src/kpatch_coro.c
++++ b/src/kpatch_coro.c
+@@ -105,8 +105,6 @@ kpatch_coro_free(struct kpatch_coro *c)
+ #define JB_RSP 6
+ #define JB_RIP 7
+ 
+-#define GLIBC_TLS_PTR_GUARD 0x30
+-
+ #define STACK_OFFSET_UC_LINK (2 * sizeof(long))
+ #define STACK_OFFSET_START_CONTEXT (3 * sizeof(long))
+ #define STACK_OFFSET_UC_LINK_PTR (4 * sizeof(long))
+@@ -191,29 +189,6 @@ static int is_test_target(struct kpatch_process *proc,
+ 	return strcmp(proc->comm, procname) == 0;
+ }
+ 
+-static int get_ptr_guard(struct kpatch_process *proc,
+-			 unsigned long *ptr_guard)
+-{
+-	int ret;
+-	unsigned long tls;
+-
+-	ret = kpatch_arch_prctl_remote(proc2pctx(proc), ARCH_GET_FS, &tls);
+-	if (ret < 0) {
+-		kpdebug("FAIL. Can't get TLS base value\n");
+-		return -1;
+-	}
+-	ret = kpatch_process_mem_read(proc,
+-				      tls + GLIBC_TLS_PTR_GUARD,
+-				      ptr_guard,
+-				      sizeof(*ptr_guard));
+-	if (ret < 0) {
+-		kpdebug("FAIL. Can't get pointer guard value\n");
+-		return -1;
+-	}
+-
+-	return 0;
+-}
+-
+ int is_centos7_qemu(struct kpatch_process *proc)
+ {
+ 	struct utsname uts;
+-- 
+2.23.0
+

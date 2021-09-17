@@ -1,0 +1,1327 @@
+From 2d1416fc62016533e159f27352f17a7d97f022b1 Mon Sep 17 00:00:00 2001
+From: Pavel Boldin <pboldin@cloudlinux.com>
+Date: Fri, 13 Oct 2017 11:52:32 +0300
+Subject: [PATCH 07/89] Toil package builder
+
+Introduce a toil[1]-based workflow to automate patch building for
+a package.
+
+[1] https://toil.readthedocs.io/
+
+Change-Id: I7e3a11ad95781b8989d24fbf3992dcb49e4c8dba
+Signed-off-by: Pavel Boldin <pboldin@cloudlinux.com>
+---
+ packages/rhel7/glibc/glibc-2.17-55.el7/info   |  23 +-
+ .../glibc/glibc-2.17-55.el7/pkgfile.yaml      |   5 +
+ scripts/pkgbuild                              |  28 +-
+ scripts/toil/README.md                        |   1 +
+ scripts/toil/build-patch.sh                   |  18 +
+ scripts/toil/pkgbuild.py                      | 894 ++++++++++++++++++
+ scripts/toil/requirements.txt                 |   4 +
+ scripts/toil/tests_pkgbuild.py                | 218 +++++
+ 8 files changed, 1175 insertions(+), 16 deletions(-)
+ create mode 100644 packages/rhel7/glibc/glibc-2.17-55.el7/pkgfile.yaml
+ create mode 100644 scripts/toil/README.md
+ create mode 100755 scripts/toil/build-patch.sh
+ create mode 100755 scripts/toil/pkgbuild.py
+ create mode 100644 scripts/toil/requirements.txt
+ create mode 100644 scripts/toil/tests_pkgbuild.py
+
+diff --git a/packages/rhel7/glibc/glibc-2.17-55.el7/info b/packages/rhel7/glibc/glibc-2.17-55.el7/info
+index 9b13a12..8cebabb 100644
+--- a/packages/rhel7/glibc/glibc-2.17-55.el7/info
++++ b/packages/rhel7/glibc/glibc-2.17-55.el7/info
+@@ -72,7 +72,16 @@ _install_originals() {
+ }
+ 
+ _run_tests() {
+-	export LD_PRELOAD=/libcare/tests/execve/execve.so
++	if test -f $LIBCARE_DIR/execve/execve.so; then
++		LD_PRELOAD=$LIBCARE_DIR/execve/execve.so
++	elif test -f $LIBCARE_DIR/tests/execve/execve.so; then
++		LD_PRELOAD=$LIBCARE_DIR/tests/execve/execve.so
++	else
++		echo "Can't find execve.so required to run tests"
++		exit 1
++	fi
++
++	export LD_PRELOAD
+ 
+ 	local ld_linux="$KP_PROJECT_BUILD_DIR/elf/ld*"
+ 
+@@ -110,9 +119,11 @@ kp_patch_test() {
+ 	rm -f /var/run/libcare.sock
+ 
+ 	PATCH_ROOT=/root/${KP_PROJECT_PATCH%.*}
+-	/libcare/src/libcare-ctl -v server /var/run/libcare.sock $PATCH_ROOT \
+-		>/root/test.log 2>&1 & :
++	$KPATCH_PATH/libcare-ctl -v server /var/run/libcare.sock $PATCH_ROOT \
++		>/data/test.log 2>&1 & :
+ 	LISTENER_PID=$!
++	sleep 1
++	kill -0 $LISTENER_PID
+ 
+ 	pushd $KP_PROJECT_BUILD_DIR
+ 
+@@ -123,11 +134,11 @@ kp_patch_test() {
+ 
+ 	popd
+ 
+-	local patched=$(awk '/kpatch_ctl targeting/ { n++ } END { print n }' /root/test.log)
++	local patched=$(awk '/kpatch_ctl targeting/ { n++ } END { print n }' /data/test.log)
+ 
+ 	test $patched -ge $executed
+ 
+-	grep -vq 'No patch(es) applicable to' /root/test.log
+-	grep 'patch hunk(s) have been successfully applied' /root/test.log \
++	grep -vq 'No patch(es) applicable to' /data/test.log
++	grep 'patch hunk(s) have been successfully applied' /data/test.log \
+ 		| wc -l
+ }
+diff --git a/packages/rhel7/glibc/glibc-2.17-55.el7/pkgfile.yaml b/packages/rhel7/glibc/glibc-2.17-55.el7/pkgfile.yaml
+new file mode 100644
+index 0000000..51028ed
+--- /dev/null
++++ b/packages/rhel7/glibc/glibc-2.17-55.el7/pkgfile.yaml
+@@ -0,0 +1,5 @@
++image: kernelcare/centos7:gcc-4.8.2-16.el7
++prebuild: /tmp/build.orig-glibc-2.17-55.el7.x86_64.rpm.tgz
++input:
++- package: .
++- patches: ../../../../patches/
+diff --git a/scripts/pkgbuild b/scripts/pkgbuild
+index e2ac7c7..8803db3 100755
+--- a/scripts/pkgbuild
++++ b/scripts/pkgbuild
+@@ -54,8 +54,9 @@ prepare() {
+ 
+ 	# Export env vars that are needed during the build
+ 	SCRIPTS="$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd)"
+-	SPWD="$(realpath $SCRIPTS/../)"
+-	export KPATCH_PATH=$SPWD/src
++	LIBCARE_DIR="${LIBCARE_DIR:-$SCRIPTS/..}"
++	KPATCH_PATH="${KPATCH_PATH:-$LIBCARE_DIR/src}"
++	export LIBCARE_DIR KPATCH_PATH
+ 	export OLDPATH=$PATH
+ 	export KPATCH_PASSTHROUGH_ASM=1
+ 	CPUS=`cat /proc/cpuinfo | grep ^processor | wc -l`
+@@ -130,18 +131,20 @@ kp_prepare_source_deb() {
+ }
+ 
+ kp_prepare_source() {
+-	echo "  downloading source for $KP_PROJECT"
+-	kp_download_source_$KP_PROJECT_FORMAT
++	if ! test -f /kcdata/$KP_PROJECT_SOURCE; then
++		echo "  downloading source for $KP_PROJECT"
++		kp_download_source_$KP_PROJECT_FORMAT
++	fi
+ 	echo "  preparing source for $KP_PROJECT"
+ 	kp_prepare_source_$KP_PROJECT_FORMAT
+ }
+ 
+ kp_patch_source() {
+ 	echo "  patching project"
+-	PATCH_DIR=$SPWD/patches
++	PATCH_DIR=$LIBCARE_DIR/patches
+ 	#patch_list_apply requires this dir
+ 	mkdir -p /tmp/build.kpatch
+-	$SPWD/scripts/patch_list_apply $KP_PROJECT_DIR $PDIR/plist $PATCH_DIR
++	$SCRIPTS/patch_list_apply $KP_PROJECT_DIR $PDIR/plist $PATCH_DIR
+ }
+ 
+ kp_prebuild_rpm() {
+@@ -364,10 +367,10 @@ overwrite_utils() {
+ 	TMPBIN=$(mktemp -d --tmpdir)
+ 
+ 	mkdir $TMPBIN/bin
+-	ln -fs /libcare/src/libcare-cc $TMPBIN/gcc
+-	ln -fs /libcare/src/libcare-cc $TMPBIN/cc
+-	ln -fs /libcare/src/libcare-cc $TMPBIN/g++
+-	ln -fs /libcare/src/libcare-cc $TMPBIN/c++
++	ln -fs $KPATCH_PATH/libcare-cc $TMPBIN/gcc
++	ln -fs $KPATCH_PATH/libcare-cc $TMPBIN/cc
++	ln -fs $KPATCH_PATH/libcare-cc $TMPBIN/g++
++	ln -fs $KPATCH_PATH/libcare-cc $TMPBIN/c++
+ 	if ! test -x /usr/bin/g++; then
+ 		rm -f $TMPBIN/g++
+ 	fi
+@@ -379,6 +382,11 @@ overwrite_utils() {
+ 	fi
+ 
+ 	export PATH=$TMPBIN:$PATH
++
++	if test "$(command -v cc)" != "$TMPBIN/cc"; then
++		echo "Can't install our wrappers, missing?"
++		exit 1
++	fi
+ }
+ 
+ kp_patch_test() {
+diff --git a/scripts/toil/README.md b/scripts/toil/README.md
+new file mode 100644
+index 0000000..5bc77b6
+--- /dev/null
++++ b/scripts/toil/README.md
+@@ -0,0 +1 @@
++This is where [toil](https://toil.readthedocs.io/)-based scripts do live.
+diff --git a/scripts/toil/build-patch.sh b/scripts/toil/build-patch.sh
+new file mode 100755
+index 0000000..0e12de4
+--- /dev/null
++++ b/scripts/toil/build-patch.sh
+@@ -0,0 +1,18 @@
++#!/bin/sh -e
++
++exec 1>&2
++
++ln -fs /data /kcdata
++
++ls -lR /data
++
++yum install -y rpm-build
++
++LIBCARE_DIR="/data"
++KPATCH_PATH="/data/src"
++export LIBCARE_DIR KPATCH_PATH
++make -C $KPATCH_PATH clean all
++make -C /data/execve clean all
++
++/kcdata/scripts/pkgbuild $@ /kcdata/package
++ls /kcdata -lR
+diff --git a/scripts/toil/pkgbuild.py b/scripts/toil/pkgbuild.py
+new file mode 100755
+index 0000000..c4b009a
+--- /dev/null
++++ b/scripts/toil/pkgbuild.py
+@@ -0,0 +1,894 @@
++#!/usr/bin/python
++"""
++Build package patches for libcare using toil[1] workflow framework.
++The basic components are the following:
++
++#. `Storage` class that works like a filesystem directory. Changes made to it
++   are passed down the chain to all the jobs via `Promise` mechanism. The
++   `Storage` class is also responsible for importing and exporting local files.
++
++#. `FileFetcherJob` job that downloads specified files from the net and puts them in
++   the storage. Supported are AWS S3, HTTP and FTP files. This is usually the
++   first job.
++
++#. `DoBuild` checks presence of the object in the Storage and runs
++   `prebuildJob` chained with `uploadJob` and `buildJob` if the object is missing.
++   Only `buildJob` is run otherwise.
++
++   This is used to build missing parts such as an archive with the baseline
++   source code called `prebuilt` which is listed as optional for the
++   `FileFetcherJob` job.
++
++#. `DockerScriptJob` that brings up a Docker container from the specified image
++   and runs the Storage-suplied script with Storage content exposed into the
++   `/data` directory.
++
++#. `UploadJob` that uploads specified objects from the Storage.
++
++#. `DoIfMissing` checks presence of the object in the Storage and runs
++   specified job if it is missing.
++
++#. `ChainJobs` is used to chain the jobs at the runtime.
++
++
++
++All the updates to the Storage are carried from the children to the followOns
++via `Promise` mechanism. The root job returns Storage from the last followOn,
++this storage is then exported to a directory.
++
++[1] https://toil.readthedocs.io/
++"""
++
++from __future__ import print_function
++
++import boto3
++import contextlib
++import collections
++import datetime
++import dateutil
++import errno
++import logging
++import os
++import requests
++import shutil
++import tarfile
++import tempfile
++import time
++import urlparse
++import yaml
++
++from toil.common import Toil
++from toil.job import Job as toilJob
++from toil.lib.docker import dockerCall, dockerCheckOutput, STOP, RM, FORGO
++
++
++def myabspath(path_or_url, root=None):
++    """Return absolute path for an url or path."""
++    if '://' not in path_or_url or path_or_url.startswith('file://'):
++        path_or_url = path_or_url.replace('file://', '')
++        if (path_or_url[0] == '.' or '/' not in path_or_url) and root:
++            path_or_url = os.path.join(root, path_or_url)
++        path_or_url = os.path.abspath(path_or_url)
++        return path_or_url
++    return
++
++FileInfo = collections.namedtuple('FileInfo', ('fileName', 'url', 'required'))
++
++def parseFileInfo(fileInfo):
++    """Parse fileInfo which is either an URL or a dictionary of form
++    {"fileName": "url"}. When url is prefixed with '*' the file is optional.
++
++    Samples:
++    >>> parseFileInfo('http://kernel.org/index.html')
++    ... "index.html", "http://kernel.org/index.html", True
++    >>> parseFileInfo('*http://kernel.org/index.html')
++    ... "index.html", "http://kernel.org/index.html", False
++    >>> parseFileInfo({'foobar.html': '*http://kernel.org/index.html'})
++    ... "foobar.html", "http://kernel.org/index.html", False
++    """
++    if isinstance(fileInfo, basestring):
++        url = fileInfo
++        fileName = os.path.basename(url)
++    elif isinstance(fileInfo, dict):
++        items = fileInfo.items()
++        if len(items) != 1:
++            raise ValueError("only one-entry dicts are allowed as fileInfo")
++        fileName, url = items[0]
++
++    required = True
++    if url.startswith('*'):
++        url = url.lstrip('*')
++        required = False
++    return FileInfo(fileName, url, required)
++
++
++class WorkflowToFileStoreProxy(object):
++    """
++    Make File.copy and Directory.copy work with toil.common.Toil object.
++    """
++    def __init__(self, workflow):
++        self.workflow = workflow
++
++    def readGlobalFile(self, fileId):
++        tmpfile = tempfile.mktemp()
++        self.workflow.exportFile(fileId, 'file://' + tmpfile)
++        return tmpfile
++
++    def writeGlobalFile(self, path):
++        return self.workflow.importFile('file:///' + path)
++
++    def getLocalTempFile(self):
++        return tempfile.mktemp()
++
++
++class Storage(dict):
++    """Keeps files organized for the workflow.
++
++    This is a dictionary that associates fileName with a file object such
++    as `File` or `Directory` class.
++
++    Additional field `promised_updates` is used to keep track of updates
++    resulting from `Promise`s of children.
++    """
++    def __init__(self, *args, **kwargs):
++        self.promised_updates = []
++        if args:
++            self.promised_updates = list(args[0].promised_updates)
++
++        super(Storage, self).__init__(*args, **kwargs)
++
++    def update(self, other):
++        """Update this Storage with files from another."""
++        if isinstance(other, Storage):
++            self.promised_updates.extend(other.promised_updates)
++
++        if isinstance(other, dict):
++            super(Storage, self).update(other)
++        else:
++            self.promised_updates.append(other)
++
++    def __setstate__(self, state):
++        """Unfold finished promised_updates."""
++        self.promised_updates = []
++        for promise in state['promised_updates']:
++            self.update(promise)
++
++    def __repr__(self):
++        s = super(Storage, self).__repr__()
++        return s + (" %r" % self.promised_updates)
++
++    @contextlib.contextmanager
++    def expose(self, rootDir=None):
++        """Expose Storage to a directory and pick up changes from it."""
++        if rootDir is None:
++            rootDir = self.fileStore.getLocalTempDir()
++        try:
++            self.toDirectory(rootDir)
++            yield rootDir
++        finally:
++            self.cleanupDirectory(rootDir)
++        self.pickupDirectory(rootDir)
++
++    def toDirectory(self, rootDir, export=False):
++        """Copy Storage content to the specified directory."""
++        for fileObj in self.values():
++            if export and isinstance(fileObj, (ImportedFile, ImportedDirectory)):
++                continue
++            fileObj.copy(self.fileStore, rootDir)
++
++    def pickupDirectory(self, directory):
++        """Pick up content of the specified directory into the Storage."""
++        files = ((name, os.path.join(directory, name))
++                 for name in os.listdir(directory))
++        return self.pickupFiles(self.fileStore, files)
++
++    def cleanupDirectory(self, rootDir):
++        """Remove storage files from the directory."""
++        return
++        for fileName in self:
++            path = os.path.join(rootDir, fileName)
++
++            if os.path.isdir(path):
++                shutil.rmtree(path)
++            else:
++                os.remove(path)
++
++    def pickupFiles(self, fileStore, files):
++        """Pick up listed files into the Storage."""
++        for fileName, path in files:
++            if fileName in self:
++                continue
++
++            if os.path.isdir(path):
++                self[fileName] = Directory.fromFiles(
++                        fileStore, [(fileName, path)])
++            else:
++                self[fileName] = File.fromLocalFile(
++                        fileStore, fileName, path)
++
++    def importLocalFiles(self, workflow, inputs, rootDir=None):
++        """Import local files at the start of the workflow.
++
++        This is usually a first step and is done:
++        >>> with Toil(options) as toil:
++        ...     storage = Storage.importLocalFiles(
++        ...                 toil,
++        ...                 ['localfile.tar', 'secondfile', 'ascript.sh'])
++        ...     rootJob = RootJob(storage)
++        """
++
++        localFiles = []
++        remoteFiles = []
++
++        for fileInfo in inputs:
++
++            fileName, url, required = parseFileInfo(fileInfo)
++
++            path = myabspath(url, rootDir)
++            if path:
++                localFiles.append((fileName, path))
++            else:
++                remoteFiles.append(fileInfo)
++
++        for fileName, path in localFiles:
++            if fileName in self:
++                continue
++
++            if os.path.isdir(path):
++                self[fileName] = ImportedDirectory.fromFiles(
++                        workflow, fileName, [(fileName, path)])
++            else:
++                try:
++                    self[fileName] = ImportedFile.fromLocalFile(
++                            workflow, fileName, path)
++                except IOError as ioerr:
++                    if ioerr.errno != errno.ENOENT:
++                        raise
++
++        print("imported localFiles %s" % (", ".join(self)))
++
++        inputs[:] = remoteFiles
++
++        return self
++
++    @classmethod
++    def fromLocalFiles(cls, workflow, inputs, rootDir=None):
++        storage = cls()
++        storage.importLocalFiles(workflow, inputs, rootDir)
++        return storage
++
++    def exportLocalFiles(self, workflow, outputDir):
++        """Export local files at the end of workflow.
++
++        This is the last step:
++        >>> with Toil(options) as toil:
++        ...     ...
++        ...     storage = toil.start(rootJob)
++        ...     storage.exportLocalFiles(toil, 'outputDir')
++        """
++        try:
++            self.fileStore = WorkflowToFileStoreProxy(workflow)
++            return self.toDirectory(outputDir, export=True)
++        finally:
++            del self.fileStore
++
++
++class File(object):
++    """A file in Storage."""
++    def __init__(self, fileName, fileId, mode=None):
++        super(File, self).__init__()
++        self.fileName = fileName
++        self.fileId = fileId
++        self.mode = mode
++
++    def copy(self, fileStore, dest):
++        localCopy = self.localCopy(fileStore)
++        if os.path.isdir(dest):
++            dest = os.path.join(dest, self.fileName)
++        shutil.copy(localCopy, dest)
++        if self.mode:
++            os.chmod(dest, self.mode)
++
++    def localCopy(self, fileStore):
++        return fileStore.readGlobalFile(self.fileId)
++
++    @contextlib.contextmanager
++    def open(self, fileStore):
++        localFile = self.localCopy(fileStore)
++        with open(localFile) as fh:
++            yield fh
++
++    @classmethod
++    def fromLocalFile(cls, fileStore, fileName, path):
++        return cls(fileName, fileStore.writeGlobalFile(path),
++                mode=os.stat(path).st_mode)
++
++    def __str__(self):
++        return "<File(%s, %s)>" % (self.fileName, self.fileId)
++
++    __repr__ = __str__
++
++
++class ImportedFile(object):
++    def __init__(self, fileName, mode=None):
++        super(ImportedFile, self).__init__()
++        self.fileName = fileName
++        self.mode = mode
++
++    def copy(self, fileStore, dest):
++        if os.path.isdir(dest):
++            dest = os.path.join(dest, self.fileName)
++        with self.open(fileStore) as fhin:
++            with open(dest, 'w') as fhout:
++                shutil.copyfileobj(fhin, fhout)
++        if self.mode:
++            os.chmod(dest, self.mode)
++
++    def localCopy(self, fileStore):
++        fileName = fileStore.getLocalTempFile()
++        self.copy(fileStore, fileName)
++        return fileName
++
++    @contextlib.contextmanager
++    def open(self, fileStore):
++        with fileStore.jobStore.readSharedFileStream(self.fileName) as fh:
++            yield fh
++
++    @classmethod
++    def fromLocalFile(cls, workflow, fileName, path):
++        workflow.importFile('file://' + path, sharedFileName=fileName)
++
++        return cls(
++                fileName,
++                mode=os.stat(path).st_mode)
++
++    def __str__(self):
++        return "<ImportedFile(%s)>" % self.fileName
++
++    __repr__ = __str__
++
++
++class Directory(object):
++    """A directory in Storage. Kept as an archive file."""
++    def __init__(self, fileId):
++        super(Directory, self).__init__()
++        self.fileId = fileId
++
++    def localCopy(self, fileStore, outDir=None):
++        localDir = outDir or fileStore.getLocalTempDir()
++        localFile = fileStore.readGlobalFile(self.fileId)
++
++        tar = tarfile.TarFile.taropen(localFile)
++        tar.extractall(path=localDir)
++
++        return localDir
++
++    def copy(self, fileStore, dest):
++        self.localCopy(fileStore, dest)
++
++    @classmethod
++    def fromFiles(cls, fileStore, files):
++
++        with fileStore.writeGlobalFileStream() as (fh, fileId):
++            tar = tarfile.TarFile.open(fileobj=fh, mode='w')
++
++            for fileName, path in files:
++                tar.add(path, arcname=fileName)
++
++        return cls(fileId)
++
++    def __str__(self):
++        return "<Directory(%s)>" % self.fileId
++
++    __repr__ = __str__
++
++
++class ImportedDirectory(Directory):
++
++    def localCopy(self, fileStore, outDir=None):
++        localDir = outDir or fileStore.getLocalTempDir()
++
++        with fileStore.jobStore.readSharedFileStream(self.fileId) as fh:
++            tar = tarfile.TarFile(fileobj=fh, mode='r')
++            tar.extractall(path=localDir)
++
++        return localDir
++
++    @classmethod
++    def fromFiles(cls, workflow, dirName, files):
++        tmpfile = tempfile.mktemp()
++
++        tar = tarfile.TarFile.open(tmpfile, mode='w')
++
++        for fileName, path in files:
++            tar.add(path, arcname=fileName)
++
++        tar.close()
++
++        workflow.importFile('file://' + tmpfile, sharedFileName=dirName)
++        os.unlink(tmpfile)
++
++        return cls(dirName)
++
++
++class IncorrectStorageUse(Exception):
++    message = "Child `Job`s with storage added outside of running parent " \
++              "wont influence parent's storage. If this is not required " \
++              "consider using addChildNoStorage and setting child's " \
++              "storage via `self._storage = child.resultStorage`."
++
++    def __init__(self):
++        super(IncorrectStorageUse, self).__init__(self.message)
++
++
++class Job(toilJob):
++    """Job with a Storage.
++
++    This Job passes Storage down the workflow via `Promise` mechanism.
++    Updates to Storage from the children are merged and passed to the
++    followOns.
++    """
++
++    _running = False
++    def __init__(self, *args, **kwargs):
++        super(Job, self).__init__(*args, **kwargs)
++        self._storage = Storage()
++        self._childStorage = Storage()
++
++    def rv(self, *path):
++        return super(Job, self).rv('rv', *path)
++
++    @property
++    def storage(self):
++        if self._running:
++            return self._storage
++        else:
++            return super(Job, self).rv('storage')
++
++    @property
++    def resultStorage(self):
++        return super(Job, self).rv('childStorage')
++
++    def _updateStorage(self, succ, promise, ourStorage):
++        if not isinstance(succ, Job):
++            return
++
++        succ._storage = promise
++
++        if ourStorage is not None:
++            if self._running:
++                ourStorage.update(succ.storage)
++            else:
++                raise IncorrectStorageUse()
++
++    def addChild(self, child):
++        """Add a child and update storage with it's promised storage"""
++        rv = super(Job, self).addChild(child)
++        self._updateStorage(child, self.storage, self._childStorage)
++        return rv
++
++    def addFollowOn(self, followOn):
++        "Add a followOn. FollowOns receive storages with updates from children"
++        rv = super(Job, self).addFollowOn(followOn)
++        self._updateStorage(followOn, self.resultStorage, None)
++        return rv
++
++    def addChildNoStorage(self, child):
++        """Add a child that won't contribute to the Storage.
++
++        Typically used to add a child whose Storage will be used as a
++        predecessor' result.
++        """
++        rv = super(Job, self).addChild(child)
++        self._updateStorage(child, self.storage, None)
++        return rv
++
++    def _run(self, jobGraph, fileStore):
++
++        self._running = True
++
++        storage = self.storage
++        storage.fileStore = fileStore
++
++        rv = super(Job, self)._run(jobGraph, fileStore)
++
++        try:
++            del storage.fileStore
++        except AttributeError:
++            pass
++        self._running = False
++
++        self._childStorage.update(self._storage)
++
++        return {
++                'rv': rv,
++                'storage': self._storage,
++                'childStorage': self._childStorage
++        }
++
++
++class NoSuchFile(Exception):
++    pass
++
++
++class FileFetcherJob(Job):
++    """Fetches files from the Web into the Storage.
++
++    Accepts a list `fileInfo`s to download. There must be no local filesystem
++    files. Instead, fetcher should be primed with a Storage having them
++    imported via `importLocalFiles`.
++    """
++    def __init__(self, files, storage=None, localRootDir=None):
++        super(FileFetcherJob, self).__init__(cores=1, memory="256M")
++
++        if storage is not None:
++            self._storage = storage
++
++        self.files = files
++        if localRootDir is None:
++            localRootDir = os.path.dirname(os.path.realpath(__file__))
++        self.localRootDir = localRootDir
++
++        remoteFiles = self.remoteFiles = []
++        localFiles = []
++
++        for fileInfo in self.files:
++
++            fileName, url, required = parseFileInfo(fileInfo)
++            if fileName in self._storage:
++                continue
++
++            path = myabspath(url, self.localRootDir)
++            if path:
++                localFiles.append((fileName, path))
++            else:
++                remoteFiles.append((fileName, url, required))
++
++        if localFiles:
++            raise Exception("Non-empty localFiles, did you forgot to importLocalFiles: %s?" % localFiles)
++
++
++    def run(self, fileStore):
++
++        for fileInfo in self.remoteFiles:
++
++            fileName, url, required = fileInfo
++            if fileName in self.storage:
++                continue
++
++            try:
++                if url.startswith('s3://'):
++                    child = S3DownloadJob(fileName, url)
++                else:
++                    child = DownloadJob(fileName, url)
++                self.addChild(child)
++            except NoSuchFile:
++                if required:
++                    raise
++
++
++class DownloadJob(Job):
++    """Download a HTTP or FTP file."""
++    def __init__(self, fileName, url):
++        self.url = url
++
++        request = requests.get(self.url, stream=True)
++        if request.status_code != 200:
++            raise NoSuchFile(self.url)
++
++        disk = request.headers.get('Content-Length', '1G')
++        request.close()
++        self.fileName = fileName
++
++        Job.__init__(self, unitName=url, memory="128M", cores=1, disk=disk)
++
++    def run(self, fileStore):
++        r = requests.get(self.url, stream=True)
++
++        with fileStore.writeGlobalFileStream() as (fh, fileId):
++            for chunk in r.iter_content(4096):
++                fh.write(chunk)
++        self.storage[self.fileName] = File(self.fileName, fileId)
++
++
++_CLIENT = None
++class S3FileJob(Job):
++
++    def parseurl(self, desturl):
++        url = urlparse.urlparse(desturl)
++        if url.scheme != "s3":
++            raise Exception("URL %s is not S3 url" % desturl)
++
++        self.url = url
++        self.bucket = self.url.netloc
++        self.key = self.url.path[1:]
++        self.desturl = desturl
++
++    def client(cls):
++
++        global _CLIENT
++        if _CLIENT is None:
++            _CLIENT = boto3.client('s3')
++        return _CLIENT
++
++
++class S3DownloadJob(S3FileJob):
++    """Download a file from AWS S3."""
++    def __init__(self, fileName, url):
++        self.parseurl(url)
++
++        try:
++            self.obj = self.client().get_object(Bucket=self.bucket, Key=self.key)
++        except self.client().exceptions.NoSuchKey:
++            raise NoSuchFile(url)
++
++        self.fileName = fileName
++        super(S3DownloadJob, self).__init__(
++                memory="1M", cores=1, unitName="download %s" % url,
++                disk=self.obj['ContentLength'])
++
++    def run(self, fileStore):
++        with fileStore.writeGlobalFileStream() as (fh, fileId):
++            self.client().download_fileobj(Bucket=self.bucket, Key=self.key,
++                                           Fileobj=fh)
++        self.storage[self.fileName] = File(self.fileName, fileId)
++
++
++class S3UploadJob(S3FileJob):
++    """Upload a file to AWS S3."""
++    def __init__(self, fileId, url):
++        self.parseurl(url)
++        self.fileId = fileId
++
++        super(S3UploadJob, self).__init__(memory="1M", cores=1, unitName="upload %s" % url)
++
++
++    def run(self, fileStore):
++        localFile = fileStore.readGlobalFile(self.fileId)
++        self.client().upload_file(localFile, self.bucket, self.key)
++
++
++class DockerScriptJob(Job):
++    """Run docker script on top of an exposed Storage."""
++
++    def __init__(self, script, image,
++                 args=[], cores=4, disk="4G",
++                 logfileName="docker-logfile"):
++        unitName = "image={image} script={script} args={args!r}".format(
++                image=image, script=script, args=args)
++        Job.__init__(self, cores=cores, disk=disk, unitName=unitName)
++
++        self.script = script
++
++        self.image = image
++        self.args = args
++        self.logfileName = logfileName
++
++    def run(self, fileStore):
++
++        e = None
++        with self.storage.expose() as dockerRoot:
++            logfilePath = os.path.join(dockerRoot, self.logfileName)
++            with open(logfilePath, "a") as logfilefh:
++                dockerDefer = fileStore.jobStore.config.dockerDefer
++
++                dockerParameters = []
++                if dockerDefer == RM:
++                    dockerParameters.append('--rm')
++
++                dockerParameters += ['-t', '-v', os.path.abspath(dockerRoot) + ':/data']
++                #dockerParameters += ['--privileged']
++                dockerParameters += ['--cap-add=SYS_PTRACE']
++
++                dockerCall(self,
++                        tool=self.image, workDir=dockerRoot,
++                        defer=dockerDefer, outfile=logfilefh,
++                        parameters=["/data/build"]
++                                   + self.args,
++                        dockerParameters=dockerParameters)
++
++        return str(e)
++
++    def __str__(self):
++        name = "build--script=%s--image=%s" % (
++                os.path.basename(self.script), self.image)
++        return name.replace(':', '-').replace('=', '-').replace('/', '-')
++
++
++
++DEFAULT_SCRIPT = './build-patch.sh'
++DEFAULT_IMAGE = 'centos:centos7'
++
++UploadInfo = collections.namedtuple('UploadInfo', ('fileName', 'url'))
++
++class UploadJob(Job):
++    """Upload files from the Storage.
++
++    URLs passed are `uploadInfo` instances.
++    """
++    def __init__(self, urls):
++        self.urls = [UploadInfo(*url) for url in urls]
++
++        super(UploadJob, self).__init__()
++
++    def run(self, fileStore):
++        for url in self.urls:
++            fileName, url = url
++
++            fileObj = self.storage.get(fileName)
++            if fileObj is None:
++                continue
++
++            path = myabspath(url)
++            if not path:
++                self.addChild(S3UploadJob(fileObj.fileId, url))
++            else:
++                localFile = fileStore.readGlobalFile(fileObj.fileId)
++                shutil.copy(localFile, path)
++
++
++class DoBuild(Job):
++    """If prebuild archive is not in storage do a prebuild and upload it to the
++    specified location. Otherwise just do a build."""
++
++    def __init__(self, fileName, prebuildJob, uploadJob, buildJob):
++        super(DoBuild, self).__init__(memory="256M")
++
++        self.fileName = fileName
++        self.prebuildJob = prebuildJob
++        self.buildJob = buildJob
++        self.uploadJob = uploadJob
++
++    def run(self, fileStore):
++        if self.fileName not in self.storage:
++            self.addChild(self.prebuildJob)
++
++            self.prebuildJob.addChildNoStorage(self.buildJob)
++            self.prebuildJob.addChildNoStorage(self.uploadJob)
++        else:
++            self.addChild(self.buildJob)
++
++        self._storage = self.buildJob.storage
++
++
++class BuildPatchJob(toilJob):
++    """Root job for patch building. Fetches files and runs Docker jobs.
++
++    The algorithm is the following:
++    1. FileFetcherJob(inputs + optional prebuild).
++
++    2. If prebuild is there, just run DockerScriptJob with a build job.
++
++    3. If prebuild is missing, run DockerScriptJob. Chain UploadJob for it.
++       Start build job DockerScriptJob it.
++    """
++    def __init__(self, storage, packageDescription):
++        super(BuildPatchJob, self).__init__(memory="256M")
++
++        self.storage = storage
++        self.packageDescription = packageDescription
++
++        self.script = packageDescription.get('script', DEFAULT_SCRIPT)
++        self.image = packageDescription.get('image', DEFAULT_IMAGE)
++
++        self.inputs = list(packageDescription.get('input'))
++
++    def run(self, fileStore):
++
++        tail = self
++
++        fetcher = FileFetcherJob(self.inputs, storage=self.storage)
++        tail.addFollowOn(fetcher)
++        tail = fetcher
++
++        prebuildUrl = self.packageDescription['prebuild']
++        prebuildName = os.path.basename(prebuildUrl)
++
++        prebuildJob = DockerScriptJob(
++                script=self.script,
++                image=self.image,
++                args=['-p'],
++                logfileName="prebuild.log")
++        uploadJob = UploadJob([(prebuildName, prebuildUrl)])
++
++        buildJob = DockerScriptJob(
++                script=self.script,
++                image=self.image,
++                logfileName="build.log")
++
++
++        doBuild = DoBuild(fileName=prebuildName, prebuildJob=prebuildJob,
++                          uploadJob=uploadJob, buildJob=buildJob)
++        tail.addFollowOn(doBuild)
++        tail = doBuild
++
++        return tail.storage
++
++
++def get_default_outputDir():
++    outputDir = os.path.join(os.getcwd(), 'libcare-output')
++    outputDir = os.path.join(outputDir, datetime.datetime.utcnow().isoformat())
++    return outputDir
++
++def readPackageDescription(packageFile):
++    with open(packageFile) as fh:
++        packageDescription = yaml.load(fh)
++
++    inputs = packageDescription['input']
++
++    cwd = os.path.dirname(os.path.realpath(__file__))
++
++    script = packageDescription.get(
++            'script', os.path.join(cwd, DEFAULT_SCRIPT))
++
++    inputs.append({'build': script})
++    inputs.append({'scripts': os.path.join(cwd, '../../scripts')})
++    inputs.append({'src': os.path.join(cwd, '../../src/')})
++    inputs.append({'execve': os.path.join(cwd, '../../tests/execve')})
++
++    prebuildUrl = packageDescription['prebuild']
++    if not prebuildUrl.startswith('*'):
++        prebuildUrl = '*' + prebuildUrl
++    inputs.append(prebuildUrl)
++
++    return packageDescription
++
++def start(toil):
++
++    options = toil.options
++
++    packageDescription = readPackageDescription(options.packageFile)
++
++    path = myabspath(options.outputDir)
++    if path:
++        print("output directory is", path)
++        options.outputDir = path
++    else:
++        print("output url is", options.outputDir)
++
++    rootDir = os.path.realpath(os.path.dirname(options.packageFile))
++
++    storage = Storage()
++    storage.importLocalFiles(toil, packageDescription['input'], rootDir=rootDir)
++    theJob = BuildPatchJob(storage, packageDescription)
++
++    return toil.start(theJob)
++
++def restart(toil):
++    packageDescription = readPackageDescription(toil.options.packageFile)
++
++    rootDir = os.path.realpath(os.path.dirname(toil.options.packageFile))
++
++    Storage.fromLocalFiles(toil, packageDescription['input'], rootDir=rootDir)
++
++    return toil.restart()
++
++def main():
++    parser = Job.Runner.getDefaultArgumentParser()
++    parser.add_argument('packageFile')
++    parser.add_argument('--outputDir', required=False,
++            default=get_default_outputDir())
++    parser.add_argument('--dockerDefer', required=False,
++            default='RM')
++    options = parser.parse_args()
++
++    options.disableCaching = True
++
++    with Toil(options) as toil:
++        toil.config.dockerDefer = globals()[options.dockerDefer.upper()]
++        toil._jobStore.writeConfig()
++
++        if not toil.options.restart:
++            storage = start(toil)
++        else:
++            storage = restart(toil)
++
++        try:
++            os.makedirs(options.outputDir)
++        except OSError as e:
++            if e.errno != errno.EEXIST:
++                raise
++        storage.exportLocalFiles(toil, options.outputDir)
++
++if __name__ == "__main__":
++    main()
+diff --git a/scripts/toil/requirements.txt b/scripts/toil/requirements.txt
+new file mode 100644
+index 0000000..ea481fa
+--- /dev/null
++++ b/scripts/toil/requirements.txt
+@@ -0,0 +1,4 @@
++toil==3.10.1
++boto3
++requests
++pyyaml
+diff --git a/scripts/toil/tests_pkgbuild.py b/scripts/toil/tests_pkgbuild.py
+new file mode 100644
+index 0000000..f60643d
+--- /dev/null
++++ b/scripts/toil/tests_pkgbuild.py
+@@ -0,0 +1,218 @@
++#!/usr/bin/python
++
++import contextlib
++import functools
++import os
++import shutil
++from StringIO import StringIO
++import tempfile
++
++from toil.common import Toil
++
++import pkgbuild
++
++def test_storage_update():
++    Storage = pkgbuild.Storage
++
++    storage = Storage(**{'test.sh': 'nothing'})
++    newStorage = Storage(**{'test2.sh': 'nothing'})
++
++    storage.update('promised_value2')
++    newStorage.update('promised_value')
++
++    newStorage.update(storage)
++
++    assert newStorage == {'test.sh': 'nothing', 'test2.sh': 'nothing'}
++    assert newStorage.promised_updates == ['promised_value', 'promised_value2']
++    assert Storage(newStorage) == newStorage
++
++def test_storage_pickle():
++    import cPickle
++    Storage = pkgbuild.Storage
++
++    storage = Storage()
++    storage['abc'] = 'test'
++    storage.update('promised_value')
++
++    storage = cPickle.loads(cPickle.dumps(storage, protocol=-1))
++    assert storage['abc'] == 'test'
++    assert storage.promised_updates == ['promised_value']
++
++def test_parseFileInfo():
++    parseFileInfo = pkgbuild.parseFileInfo
++
++    info = parseFileInfo('http://kernel.org/index.html')
++    assert info == pkgbuild.FileInfo(
++            fileName='index.html',
++            url='http://kernel.org/index.html',
++            required=True)
++
++    info = parseFileInfo('*http://kernel.org/index.html')
++    assert info == pkgbuild.FileInfo(
++            fileName='index.html',
++            url='http://kernel.org/index.html',
++            required=False)
++
++    info = parseFileInfo({'foobar.html': 'http://kernel.org/index.html'})
++    assert info == pkgbuild.FileInfo(
++            fileName='foobar.html',
++            url='http://kernel.org/index.html',
++            required=True)
++
++    info = parseFileInfo({'foobar.html': '*http://kernel.org/index.html'})
++    assert info == pkgbuild.FileInfo(
++            fileName='foobar.html',
++            url='http://kernel.org/index.html',
++            required=False)
++
++    try:
++        info = parseFileInfo({
++            'foobar.html': '*http://kernel.org/index.html',
++            'other': 'things'})
++    except ValueError:
++        pass
++    else:
++        assert False
++
++class FakeJobStorage(object):
++    def __init__(self, imported):
++        self.imported = imported
++
++    @contextlib.contextmanager
++    def readSharedFileStream(self, fileId):
++        buf = fileId
++        if self.imported and fileId in self.imported:
++            buf = self.imported[fileId]
++        yield StringIO(buf)
++
++class FakeFileStorage(object):
++    def __init__(self, imported=None):
++        self.localTempDir = tempfile.mkdtemp()
++        self.jobStore = FakeJobStorage(imported)
++
++    def getLocalTempDir(self):
++        return self.localTempDir
++
++    def readGlobalFile(self, fileId):
++        fileName = tempfile.mktemp()
++        with open(fileName, "w") as fh:
++            print(fileId)
++            fh.write(fileId)
++        return fileName
++
++    def writeGlobalFile(self, path):
++        with open(path) as fh:
++            return fh.read()
++
++    @contextlib.contextmanager
++    def writeGlobalFileStream(self):
++        fh_and_fileId = StringIO()
++        yield fh_and_fileId, fh_and_fileId
++
++class FakeWorkflow(object):
++    def __init__(self):
++        self.imported = {}
++
++    def importFile(self, path, sharedFileName):
++        self.imported[sharedFileName] = slurp(path.replace('file://', ''))
++
++def slurp(fileName):
++    return open(fileName).read()
++
++def test_storage():
++    storage = pkgbuild.Storage(
++        **{
++            'file.txt': pkgbuild.File('file.txt', 'some content'),
++            'imported.txt': pkgbuild.ImportedFile('imported.txt')
++        }
++    )
++    storage.fileStore = FakeFileStorage()
++
++    with storage.expose() as dirname:
++
++        assert set(os.listdir(dirname)) == set(['file.txt', 'imported.txt'])
++
++        assert slurp(os.path.join(dirname, 'file.txt')) == 'some content'
++        assert slurp(os.path.join(dirname, 'imported.txt')) == 'imported.txt'
++
++        with open(os.path.join(dirname, 'newfile.txt'), 'w') as fh:
++            fh.write('and some content here')
++
++
++    assert storage['newfile.txt'].fileId == 'and some content here'
++
++    with storage.expose() as dirname:
++
++
++        newdir = os.path.join(dirname, 'testdir')
++        os.mkdir(newdir)
++        with open(os.path.join(newdir, 'subfile'), "w") as fh:
++            fh.write('foobar')
++
++        inputs = os.listdir(dirname) + ['http://somefile.com/index.html']
++        workflow = FakeWorkflow()
++        newStorage = pkgbuild.Storage.fromLocalFiles(
++                workflow, inputs, dirname)
++        assert inputs == ['http://somefile.com/index.html']
++
++
++    assert isinstance(newStorage['testdir'], pkgbuild.ImportedDirectory)
++
++    newStorage.fileStore = FakeFileStorage(workflow.imported)
++    with newStorage.expose() as dirname:
++
++        assert slurp(os.path.join(dirname, 'file.txt')) == 'some content'
++        assert slurp(os.path.join(dirname, 'imported.txt')) == 'imported.txt'
++        assert slurp(os.path.join(dirname, 'newfile.txt')) == 'and some content here'
++        assert slurp(os.path.join(dirname, 'testdir', 'subfile')) == 'foobar'
++
++
++class DummyStorageUpdate(pkgbuild.Job):
++    def __init__(self, filename):
++        super(DummyStorageUpdate, self).__init__(unitName=filename)
++        self.filename = filename
++
++    def run(self, fileStore):
++        self.storage[self.filename] = 'something'
++
++class DummyStorageAsChild(pkgbuild.Job):
++    def run(self, fileStore):
++        a = DummyStorageUpdate('bar')
++        self.addChild(a)
++
++class RootJob(pkgbuild.Job):
++    def __init__(self, storage):
++        super(RootJob, self).__init__()
++        self._storage = storage
++
++    def run(self, fileStore):
++
++        tail = self
++
++        a = DummyStorageUpdate('foo')
++        self.addChild(a)
++        tail = a
++
++        b = DummyStorageAsChild()
++        tail.addFollowOn(b)
++        tail = b
++
++        return tail.resultStorage
++
++def test_job_storage():
++    parser = pkgbuild.Job.Runner.getDefaultArgumentParser()
++    options = parser.parse_args(['test_job_storage'])
++
++    options.workDir = tempfile.mkdtemp()
++    options.jobStore = os.path.join(options.workDir, 'workdir')
++
++    storage = pkgbuild.Storage(foobar='here i go')
++    root = RootJob(storage=storage)
++
++    try:
++        with Toil(options) as toil:
++            storage = toil.start(root)
++    finally:
++        shutil.rmtree(options.workDir)
++
++    assert storage == {'foo': 'something', 'bar': 'something', 'foobar': 'here i go'}
+-- 
+2.23.0
+

@@ -1,0 +1,379 @@
+From 7d431211063a9bf6c789bb67a2ed216025279a66 Mon Sep 17 00:00:00 2001
+From: Roman Rashchupkin <rrashchupkin@cloudlinux.com>
+Date: Tue, 23 Jan 2018 13:41:38 +0300
+Subject: [PATCH 10/89] Add --test stage to pkgbuild
+
+Signed-off-by: Roman Rashchupkin <rrashchupkin@cloudlinux.com>
+---
+ packages/rhel7/glibc/glibc-2.17-55.el7/info   | 36 ++++-----
+ .../glibc/glibc-2.17-55.el7/pkgfile.yaml      |  1 +
+ scripts/pkgbuild                              | 81 ++++++++++++++++---
+ scripts/toil/build-patch.sh                   |  1 -
+ scripts/toil/pkgbuild.py                      | 57 +++++++++----
+ 5 files changed, 126 insertions(+), 50 deletions(-)
+
+diff --git a/packages/rhel7/glibc/glibc-2.17-55.el7/info b/packages/rhel7/glibc/glibc-2.17-55.el7/info
+index 8cebabb..e5805c3 100644
+--- a/packages/rhel7/glibc/glibc-2.17-55.el7/info
++++ b/packages/rhel7/glibc/glibc-2.17-55.el7/info
+@@ -55,21 +55,6 @@ kp_build_hook() {
+ 		$KP_PROJECT_BUILD_ROOT/SPECS/$KP_PROJECT_SPEC
+ }
+ 
+-# Replace patch build results with original libraries for testing
+-_install_originals() {
+-	eval set -- $KP_INSTALL_FILES
+-	while test -n "$1"; do
+-		local buildpath="$1"
+-		local installpath="$2"
+-		shift 2
+-
+-		if test "$installpath" = "IGNORE"; then
+-			continue
+-		fi
+-
+-		/bin/cp -r /root/root.original/$installpath $KP_PROJECT_BUILD_DIR/$buildpath
+-	done
+-}
+ 
+ _run_tests() {
+ 	if test -f $LIBCARE_DIR/execve/execve.so; then
+@@ -113,15 +98,22 @@ _run_tests() {
+ 	export PATH=$KCPATH
+ }
+ 
+-kp_patch_test() {
+-	_install_originals
++kp_prepare_test_binaries() {
++	# Replace patch build results with original libraries for testing
++	kp_install_files /root/root.original \
++		$KP_PROJECT_BUILD_DIR \
++		"to_prebuild" \
++		"$KP_INSTALL_FILES"
++}
+ 
++kp_patch_test() {
+ 	rm -f /var/run/libcare.sock
+ 
+-	PATCH_ROOT=/root/${KP_PROJECT_PATCH%.*}
++	PATCH_ROOT=$KP_PROJECT_BUILD_ROOT/storage
+ 	$KPATCH_PATH/libcare-ctl -v server /var/run/libcare.sock $PATCH_ROOT \
+-		>/data/test.log 2>&1 & :
++		>/data/libcare-ctl.log 2>&1 & :
+ 	LISTENER_PID=$!
++
+ 	sleep 1
+ 	kill -0 $LISTENER_PID
+ 
+@@ -134,11 +126,11 @@ kp_patch_test() {
+ 
+ 	popd
+ 
+-	local patched=$(awk '/kpatch_ctl targeting/ { n++ } END { print n }' /data/test.log)
++	local patched=$(awk '/kpatch_ctl targeting/ { n++ } END { print n }' /data/libcare-ctl.log)
+ 
+ 	test $patched -ge $executed
+ 
+-	grep -vq 'No patch(es) applicable to' /data/test.log
+-	grep 'patch hunk(s) have been successfully applied' /data/test.log \
++	grep -vq 'No patch(es) applicable to' /data/libcare-ctl.log
++	grep 'patch hunk(s) have been successfully applied' /data/libcare-ctl.log \
+ 		| wc -l
+ }
+diff --git a/packages/rhel7/glibc/glibc-2.17-55.el7/pkgfile.yaml b/packages/rhel7/glibc/glibc-2.17-55.el7/pkgfile.yaml
+index 51028ed..b17e895 100644
+--- a/packages/rhel7/glibc/glibc-2.17-55.el7/pkgfile.yaml
++++ b/packages/rhel7/glibc/glibc-2.17-55.el7/pkgfile.yaml
+@@ -1,5 +1,6 @@
+ image: kernelcare/centos7:gcc-4.8.2-16.el7
+ prebuild: /tmp/build.orig-glibc-2.17-55.el7.x86_64.rpm.tgz
++patch: /tmp/kpatch-glibc-2.17-55.el7.x86_64.tgz
+ input:
+ - package: .
+ - patches: ../../../../patches/
+diff --git a/scripts/pkgbuild b/scripts/pkgbuild
+index 97c78a9..f91af57 100755
+--- a/scripts/pkgbuild
++++ b/scripts/pkgbuild
+@@ -17,6 +17,7 @@ die() {
+ usage() {
+ 	echo "Usage: build [--prebuild] [--help] [--arch ARCH] DIR"
+ 	echo "    -p|--prebuild     prebuild project for further use"
++	echo "    -t|--test         run unit and stress tests"
+ 	echo "    -a|--arch ARCH    target architecture(x86_64 by default)"
+ 	echo "    -h|--help         print this message"
+ 	echo "    DIR               directory with project's info file and other resources"
+@@ -32,6 +33,9 @@ prepare() {
+ 		-p|--prebuild)
+ 			ACTION=prebuild
+ 			;;
++		-t|--test)
++			ACTION=test
++			;;
+ 		-a|--arch)
+ 			shift
+ 			ARCH=$1
+@@ -247,13 +251,17 @@ kp_build_rpm() {
+ 		-bc						\
+ 		$KP_RPMBUILD_FLAGS				\
+ 		'--define "_topdir $KP_PROJECT_BUILD_ROOT"'	\
+-		$KP_PROJECT_BUILD_ROOT/SPECS/$KP_PROJECT_SPEC
++		$KP_PROJECT_BUILD_ROOT/SPECS/$KP_PROJECT_SPEC 2>&1 |
++		tee $KP_PROJECT_BUILD_ROOT/build.log
+ }
+ 
+-kp_install_generic() {
+-	local ROOT_PATCHED="$HOME/root.patched"
++kp_install_files() {
++	local src="$1"
++	local dest="$2"
++	local direction="$3"
++	local files="$4"
+ 
+-	eval set -- $KP_INSTALL_FILES
++	eval set -- $files
+ 	while test -n "$1"; do
+ 		local buildpath="$1"
+ 		local installpath="$2"
+@@ -263,12 +271,16 @@ kp_install_generic() {
+ 			continue
+ 		fi
+ 
+-		installpath="$ROOT_PATCHED/$installpath"
+-
+-		mkdir -p "$(dirname "$installpath")"
+-
+-		/bin/cp -ra $KP_PROJECT_BUILD_DIR/$buildpath $installpath
++		if test $direction = "from_prebuild"; then
++			install -D $src/$buildpath $dest/$installpath
++		else
++			install -D $src/$installpath $dest/$buildpath
++		fi
+ 	done
++}
++
++kp_check_missing_files() {
++	local builddir="$1"
+ 
+ 	local failed=
+ 	pushd $KP_PROJECT_BUILD_DIR
+@@ -295,6 +307,16 @@ kp_install_generic() {
+ 	fi
+ }
+ 
++kp_install_generic() {
++	local root_patched="$HOME/root.patched"
++
++	kp_install_files $KP_PROJECT_BUILD_DIR \
++		$root_patched \
++		"from_prebuild" \
++		"$KP_INSTALL_FILES"
++	kp_check_missing_files $KP_PROJECT_BUILD_DIR
++}
++
+ kp_install_rpm() {
+ 	kp_install_orig_rpm
+ 	kp_install_generic
+@@ -367,6 +389,33 @@ kp_pack_patch() {
+ 	popd
+ }
+ 
++kp_unpack_patch() {
++	local tmpdir=$(mktemp -d --tmpdir)
++
++	echo "  unpacking patches for $KP_PROJECT into $KP_PROJECT_BUILD_ROOT/storage"
++
++	tar -xf /kcdata/$KP_PROJECT_PATCH -C $tmpdir
++
++	find $tmpdir -name \*.kpatch > $tmpdir/patchlist
++
++	while read patchfile; do
++		local patchname=${patchfile##*/}
++		local buildid=${patchname%.kpatch}
++
++		local KP_STORAGE=$KP_PROJECT_BUILD_ROOT/storage/$buildid
++
++		mkdir -p $KP_STORAGE/1
++		cp $patchfile $KP_STORAGE/1/kpatch.bin
++		ln -rs $KP_STORAGE/1 $KP_STORAGE/latest
++	done < $tmpdir/patchlist
++
++	rm -fr $tmpdir
++}
++
++kp_mark_tests_fail() {
++	touch /kcdata/Tests-FAIL
++}
++
+ overwrite_utils() {
+ 	TMPBIN=$(mktemp -d --tmpdir)
+ 
+@@ -394,7 +443,8 @@ overwrite_utils() {
+ }
+ 
+ kp_patch_test() {
+-	:
++	echo "Empty kp_patch_test called, override it!"
++	exit 1
+ }
+ 
+ main() {
+@@ -408,20 +458,25 @@ main() {
+ 
+ 	kp_prepare_env_hook
+ 
+-	if [ "$ACTION" == "prebuild" ]; then
++	if test "$ACTION" == "prebuild"; then
+ 		kp_prepare_source
+ 		kp_prebuild_hook
+ 		kp_prebuild
+ 		kp_pack_prebuilt
+-	else
++	elif test "$ACTION" == "build"; then
+ 		kp_unpack_prebuilt
+ 		kp_patch_source
+ 		kp_build_hook
+ 		kp_build
+ 		kp_sanity_check
+ 		kp_gen_kpatch
+-		kp_patch_test
+ 		kp_pack_patch
++	elif test "$ACTION" == "test"; then
++		kp_unpack_prebuilt
++		kp_prepare_test_binaries
++		kp_unpack_patch
++		#kp_patch_source
++		kp_patch_test
+ 	fi
+ 
+ 	#clean_dirs
+diff --git a/scripts/toil/build-patch.sh b/scripts/toil/build-patch.sh
+index 0e12de4..28720a1 100755
+--- a/scripts/toil/build-patch.sh
++++ b/scripts/toil/build-patch.sh
+@@ -15,4 +15,3 @@ make -C $KPATCH_PATH clean all
+ make -C /data/execve clean all
+ 
+ /kcdata/scripts/pkgbuild $@ /kcdata/package
+-ls /kcdata -lR
+diff --git a/scripts/toil/pkgbuild.py b/scripts/toil/pkgbuild.py
+index c4b009a..e091032 100755
+--- a/scripts/toil/pkgbuild.py
++++ b/scripts/toil/pkgbuild.py
+@@ -12,8 +12,9 @@ The basic components are the following:
+    first job.
+ 
+ #. `DoBuild` checks presence of the object in the Storage and runs
+-   `prebuildJob` chained with `uploadJob` and `buildJob` if the object is missing.
+-   Only `buildJob` is run otherwise.
++   `prebuildJob` chained with `uploadPrebuildJob`, `buildJob`,
++   `uploadPatchJob` and `testJob` if the object is missing.
++   Only `buildJob` and it's children are run otherwise.
+ 
+    This is used to build missing parts such as an archive with the baseline
+    source code called `prebuilt` which is listed as optional for the
+@@ -625,7 +626,7 @@ class S3DownloadJob(S3FileJob):
+         self.fileName = fileName
+         super(S3DownloadJob, self).__init__(
+                 memory="1M", cores=1, unitName="download %s" % url,
+-                disk=self.obj['ContentLength'])
++                disk=max(4096, self.obj['ContentLength']))
+ 
+     def run(self, fileStore):
+         with fileStore.writeGlobalFileStream() as (fh, fileId):
+@@ -731,24 +732,35 @@ class DoBuild(Job):
+     """If prebuild archive is not in storage do a prebuild and upload it to the
+     specified location. Otherwise just do a build."""
+ 
+-    def __init__(self, fileName, prebuildJob, uploadJob, buildJob):
++    def __init__(self, prebuildFileName, buildFileName, prebuildJob, uploadPrebuildJob, buildJob, uploadPatchJob, testJob):
+         super(DoBuild, self).__init__(memory="256M")
+ 
+-        self.fileName = fileName
++        self.prebuildFileName = prebuildFileName
++        self.buildFileName = buildFileName
+         self.prebuildJob = prebuildJob
+         self.buildJob = buildJob
+-        self.uploadJob = uploadJob
++        self.uploadPrebuildJob = uploadPrebuildJob
++        self.uploadPatchJob = uploadPatchJob
++        self.testJob = testJob
+ 
+     def run(self, fileStore):
+-        if self.fileName not in self.storage:
++        if self.prebuildFileName not in self.storage:
+             self.addChild(self.prebuildJob)
+ 
+             self.prebuildJob.addChildNoStorage(self.buildJob)
+-            self.prebuildJob.addChildNoStorage(self.uploadJob)
++            self.prebuildJob.addChildNoStorage(self.uploadPrebuildJob)
++
++            self.buildJob.addChildNoStorage(self.uploadPatchJob)
++            self.buildJob.addChildNoStorage(self.testJob)
+         else:
+-            self.addChild(self.buildJob)
++            if self.buildFileName not in self.storage:
++	        self.addChild(self.buildJob)
++                self.buildJob.addChildNoStorage(self.uploadPatchJob)
++                self.buildJob.addChildNoStorage(self.testJob)
++            else:
++                self.addChild(self.testJob)
+ 
+-        self._storage = self.buildJob.storage
++        self._storage = self.testJob.storage
+ 
+ 
+ class BuildPatchJob(toilJob):
+@@ -784,21 +796,33 @@ class BuildPatchJob(toilJob):
+         prebuildUrl = self.packageDescription['prebuild']
+         prebuildName = os.path.basename(prebuildUrl)
+ 
++        patchUrl = self.packageDescription['patch']
++        buildName = os.path.basename(patchUrl)
++
+         prebuildJob = DockerScriptJob(
+                 script=self.script,
+                 image=self.image,
+-                args=['-p'],
++                args=['--prebuild'],
+                 logfileName="prebuild.log")
+-        uploadJob = UploadJob([(prebuildName, prebuildUrl)])
++        uploadPrebuildJob = UploadJob([(prebuildName, prebuildUrl)])
++
+ 
+         buildJob = DockerScriptJob(
+                 script=self.script,
+                 image=self.image,
+                 logfileName="build.log")
++        uploadPatchJob = UploadJob([(buildName, patchUrl)])
+ 
++        testJob = DockerScriptJob(
++                script=self.script,
++                image=self.image,
++                args=['--test'],
++                logfileName="test.log")
++
++        doBuild = DoBuild(prebuildFileName=prebuildName, buildFileName=buildName, prebuildJob=prebuildJob,
++                          uploadPrebuildJob=uploadPrebuildJob, buildJob=buildJob,
++			  uploadPatchJob=uploadPatchJob, testJob=testJob)
+ 
+-        doBuild = DoBuild(fileName=prebuildName, prebuildJob=prebuildJob,
+-                          uploadJob=uploadJob, buildJob=buildJob)
+         tail.addFollowOn(doBuild)
+         tail = doBuild
+ 
+@@ -831,6 +855,11 @@ def readPackageDescription(packageFile):
+         prebuildUrl = '*' + prebuildUrl
+     inputs.append(prebuildUrl)
+ 
++    patchUrl = packageDescription['patch']
++    if not patchUrl.startswith('*'):
++        patchUrl = '*' + patchUrl
++    inputs.append(patchUrl)
++
+     return packageDescription
+ 
+ def start(toil):
+-- 
+2.23.0
+

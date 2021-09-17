@@ -1,0 +1,67 @@
+From b6b35d80755caed0528dfdf3825ecf055fe9ea76 Mon Sep 17 00:00:00 2001
+From: Roman Rashchupkin <rrashchupkin@cloudlinux.com>
+Date: Wed, 28 Feb 2018 23:05:50 +0300
+Subject: [PATCH 16/89] Waitpid for finished threads after detach.
+
+---
+ src/kpatch_process.c | 14 +++++++++++++-
+ src/kpatch_ptrace.c  |  2 +-
+ 2 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/src/kpatch_process.c b/src/kpatch_process.c
+index 2f85373..5c0374a 100644
+--- a/src/kpatch_process.c
++++ b/src/kpatch_process.c
+@@ -12,6 +12,11 @@
+ #include <sys/stat.h>
+ #include <sys/sysmacros.h>
+ 
++#include <sys/syscall.h>
++#include <sys/types.h>
++#include <sys/wait.h>
++#include <sys/ptrace.h>
++
+ #include <gelf.h>
+ #include <libunwind.h>
+ #include <libunwind-ptrace.h>
+@@ -537,6 +542,8 @@ static void
+ process_detach(kpatch_process_t *proc)
+ {
+ 	struct kpatch_ptrace_ctx *p, *ptmp;
++	int status;
++	pid_t pid;
+ 
+ 	if (proc->memfd >= 0 && close(proc->memfd) < 0)
+ 		kplogerror("can't close memfd");
+@@ -546,9 +553,14 @@ process_detach(kpatch_process_t *proc)
+ 		unw_destroy_addr_space(proc->ptrace.unwd);
+ 
+ 	list_for_each_entry_safe(p, ptmp, &proc->ptrace.pctxs, list) {
+-		kpatch_ptrace_detach(p);
++		if (kpatch_ptrace_detach(p) == -ESRCH) {
++			do {
++				pid = waitpid(p->pid, &status, __WALL);
++			} while (pid > 0 && !WIFEXITED(status));
++		}
+ 		kpatch_ptrace_ctx_destroy(p);
+ 	}
++	kpinfo("Finished ptrace detaching.");
+ }
+ 
+ static int
+diff --git a/src/kpatch_ptrace.c b/src/kpatch_ptrace.c
+index f91b80e..a5f61b3 100644
+--- a/src/kpatch_ptrace.c
++++ b/src/kpatch_ptrace.c
+@@ -1186,7 +1186,7 @@ int kpatch_ptrace_detach(struct kpatch_ptrace_ctx *pctx)
+ 	ret = ptrace(PTRACE_DETACH, pctx->pid, NULL, NULL);
+ 	if (ret < 0) {
+ 		kplogerror("can't detach from %d\n", pctx->pid);
+-		return -1;
++		return -errno;
+ 	}
+ 
+ 	kpdebug("OK\n");
+-- 
+2.23.0
+

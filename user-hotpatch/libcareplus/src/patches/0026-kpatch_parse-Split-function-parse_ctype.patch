@@ -1,0 +1,154 @@
+From 13dafd93cf011d79f1f4baf2c9035faeb52f4945 Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Mon, 12 Oct 2020 13:31:41 +0800
+Subject: [PATCH 26/89] kpatch_parse: Split function parse_ctype
+
+The parse_ctype function is arch related, so let's make two
+separate definations in arch/x86/arch_parse.c and arch/aarch64/arch_parse.c
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/arch/aarch64/arch_parse.c | 34 ++++++++++++++++++++++++++++++++++
+ src/arch/x86/arch_parse.c     | 31 +++++++++++++++++++++++++++++++
+ src/include/kpatch_parse.h    |  2 ++
+ src/kpatch_parse.c            | 28 +---------------------------
+ 4 files changed, 68 insertions(+), 27 deletions(-)
+
+diff --git a/src/arch/aarch64/arch_parse.c b/src/arch/aarch64/arch_parse.c
+index e69de29..8eb88a9 100644
+--- a/src/arch/aarch64/arch_parse.c
++++ b/src/arch/aarch64/arch_parse.c
+@@ -0,0 +1,34 @@
++#include <stdlib.h>
++
++#include "include/kpatch_log.h"
++#include "include/kpatch_parse.h"
++#include "include/kpatch_flags.h"
++
++int parse_ctype(char *origs, bool with_checks)
++{
++	char *s = origs;
++	int type;
++	kpstr_t t;
++
++	s = skip_blanks(s);
++	if (s[0] == '#')
++		return DIRECTIVE_COMMENT;		/* Single-line comment */
++
++	if (s[0] == '/' && s[1] == '/')
++		return DIRECTIVE_COMMENT;      /* Arm disassembly support c style comment */
++
++	get_token(&s, &t);
++	type = find_ctype(&t);
++
++	if (type >= 0)
++		return type;
++
++	/*
++	 * Asm labels starting from digits are local labels, they can be even created multiple times in the same function.
++	 * So there is no reason to handle them and bother with renaming at all. It would create conflicts at our brains
++	 * and require special tracking and matching... Brrrr.... */
++	if (s && *s == ':')
++		return !isdigit(t.s[0]) ? DIRECTIVE_LABEL : DIRECTIVE_LOCAL_LABEL;
++
++	return DIRECTIVE_OTHER;
++}
+diff --git a/src/arch/x86/arch_parse.c b/src/arch/x86/arch_parse.c
+index e69de29..5a67116 100644
+--- a/src/arch/x86/arch_parse.c
++++ b/src/arch/x86/arch_parse.c
+@@ -0,0 +1,31 @@
++#include <stdlib.h>
++
++#include "include/kpatch_log.h"
++#include "include/kpatch_parse.h"
++#include "include/kpatch_flags.h"
++
++int parse_ctype(char *origs, bool with_checks)
++{
++	char *s = origs;
++	int type;
++	kpstr_t t;
++
++	s = skip_blanks(s);
++	if (s[0] == '#')
++		return DIRECTIVE_COMMENT;		/* Single-line comment */
++
++	get_token(&s, &t);
++	type = find_ctype(&t);
++
++	if (type >= 0)
++		return type;
++
++	/*
++	 * Asm labels starting from digits are local labels, they can be even created multiple times in the same function.
++	 * So there is no reason to handle them and bother with renaming at all. It would create conflicts at our brains
++	 * and require special tracking and matching... Brrrr.... */
++	if (s && *s == ':')
++		return !isdigit(t.s[0]) ? DIRECTIVE_LABEL : DIRECTIVE_LOCAL_LABEL;
++
++	return DIRECTIVE_OTHER;
++}
+diff --git a/src/include/kpatch_parse.h b/src/include/kpatch_parse.h
+index 1012d5d..e1b7501 100644
+--- a/src/include/kpatch_parse.h
++++ b/src/include/kpatch_parse.h
+@@ -51,6 +51,8 @@ void init_ctypes(struct kp_file *f);
+ int ctype(struct kp_file *f, int l);
+ int is_sect_cmd(struct kp_file *f, int l);
+ 
++
++int find_ctype(kpstr_t *t);
+ int parse_ctype(char *s, bool with_checks);
+ 
+ /* ----------------------------------------- sections ----------------------------------------- */
+diff --git a/src/kpatch_parse.c b/src/kpatch_parse.c
+index 44e8a60..4bafdb7 100644
+--- a/src/kpatch_parse.c
++++ b/src/kpatch_parse.c
+@@ -109,7 +109,7 @@ static void get_type_args(char *s, kpstr_t *nm, kpstr_t *attr)
+ 		kpfatal("can't parse .type command");
+ }
+ 
+-static int find_ctype(kpstr_t *t)
++int find_ctype(kpstr_t *t)
+ {
+ 	int i;
+ 	for (i = 0; i < (int)(sizeof(asm_directives)/sizeof(asm_directives[0])); i++) {
+@@ -119,32 +119,6 @@ static int find_ctype(kpstr_t *t)
+ 	return -1;
+ }
+ 
+-int parse_ctype(char *origs, bool with_checks)
+-{
+-	char *s = origs;
+-	int type;
+-	kpstr_t t;
+-
+-	s = skip_blanks(s);
+-	if (s[0] == '#')
+-		return DIRECTIVE_COMMENT;		/* Single-line comment */
+-
+-	get_token(&s, &t);
+-	type = find_ctype(&t);
+-
+-	if (type >= 0)
+-		return type;
+-
+-	/*
+-	 * Asm labels starting from digits are local labels, they can be even created multiple times in the same function.
+-	 * So there is no reason to handle them and bother with renaming at all. It would create conflicts at our brains
+-	 * and require special tracking and matching... Brrrr.... */
+-	if (s && *s == ':')
+-		return !isdigit(t.s[0]) ? DIRECTIVE_LABEL : DIRECTIVE_LOCAL_LABEL;
+-
+-	return DIRECTIVE_OTHER;
+-}
+-
+ int ctype(struct kp_file *f, int l)
+ {
+ 	if (l >= f->nr_lines)
+-- 
+2.23.0
+

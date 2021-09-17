@@ -1,0 +1,137 @@
+From 8c0199836e7944569dbbeb5e571d791b8e466275 Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Mon, 12 Oct 2020 16:24:09 +0800
+Subject: [PATCH 40/89] kpatch_ptrace: Split function copy_regs
+
+The function copy_regs is arch related, so make two separate
+definations in arch/x86/arch_ptrace.c and arch/aarch64/arch_ptrace.c
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/arch/aarch64/arch_ptrace.c | 28 ++++++++++++++++++++++++++++
+ src/arch/x86/arch_ptrace.c     | 22 ++++++++++++++++++++++
+ src/include/kpatch_ptrace.h    |  3 +++
+ src/kpatch_ptrace.c            | 22 ----------------------
+ 4 files changed, 53 insertions(+), 22 deletions(-)
+
+diff --git a/src/arch/aarch64/arch_ptrace.c b/src/arch/aarch64/arch_ptrace.c
+index fb19e86..0366d4f 100644
+--- a/src/arch/aarch64/arch_ptrace.c
++++ b/src/arch/aarch64/arch_ptrace.c
+@@ -22,6 +22,34 @@
+ 
+ #include <gelf.h>
+ 
++void copy_regs(struct user_regs_struct *dst,
++		      struct user_regs_struct *src)
++{
++#define COPY_REG(x) dst->x = src->x
++       COPY_REG(regs[0]);
++       COPY_REG(regs[1]);
++       COPY_REG(regs[2]);
++       COPY_REG(regs[3]);
++       COPY_REG(regs[4]);
++       COPY_REG(regs[5]);
++       COPY_REG(regs[8]);
++       COPY_REG(regs[29]);
++
++       COPY_REG(regs[9]);
++       COPY_REG(regs[10]);
++       COPY_REG(regs[11]);
++       COPY_REG(regs[12]);
++       COPY_REG(regs[13]);
++       COPY_REG(regs[14]);
++       COPY_REG(regs[15]);
++       COPY_REG(regs[16]);
++       COPY_REG(regs[17]);
++       COPY_REG(regs[18]);
++       COPY_REG(regs[19]);
++       COPY_REG(regs[20]);
++#undef COPY_REG
++}
++
+ int
+ kpatch_arch_ptrace_waitpid(kpatch_process_t *proc,
+ 		      struct timespec *timeout,
+diff --git a/src/arch/x86/arch_ptrace.c b/src/arch/x86/arch_ptrace.c
+index 6e943fd..fa23757 100644
+--- a/src/arch/x86/arch_ptrace.c
++++ b/src/arch/x86/arch_ptrace.c
+@@ -22,6 +22,28 @@
+ 
+ #include <gelf.h>
+ 
++void copy_regs(struct user_regs_struct *dst,
++		      struct user_regs_struct *src)
++{
++#define COPY_REG(x) dst->x = src->x
++	COPY_REG(r15);
++	COPY_REG(r14);
++	COPY_REG(r13);
++	COPY_REG(r12);
++	COPY_REG(rbp);
++	COPY_REG(rbx);
++	COPY_REG(r11);
++	COPY_REG(r10);
++	COPY_REG(r9);
++	COPY_REG(r8);
++	COPY_REG(rax);
++	COPY_REG(rcx);
++	COPY_REG(rdx);
++	COPY_REG(rsi);
++	COPY_REG(rdi);
++#undef COPY_REG
++}
++
+ int kpatch_arch_ptrace_waitpid(kpatch_process_t *proc,
+ 		      struct timespec *timeout,
+ 		      const sigset_t *sigset)
+diff --git a/src/include/kpatch_ptrace.h b/src/include/kpatch_ptrace.h
+index 1c7d33e..e434d68 100644
+--- a/src/include/kpatch_ptrace.h
++++ b/src/include/kpatch_ptrace.h
+@@ -122,4 +122,7 @@ kpatch_arch_ptrace_waitpid(kpatch_process_t *proc,
+ 		      struct timespec *timeout,
+ 		      const sigset_t *sigset);
+ 
++void copy_regs(struct user_regs_struct *dst,
++		      struct user_regs_struct *src);
++
+ #endif
+diff --git a/src/kpatch_ptrace.c b/src/kpatch_ptrace.c
+index 3c57288..180bbaa 100644
+--- a/src/kpatch_ptrace.c
++++ b/src/kpatch_ptrace.c
+@@ -413,28 +413,6 @@ poke_back:
+ 	return ret;
+ }
+ 
+-static void copy_regs(struct user_regs_struct *dst,
+-		      struct user_regs_struct *src)
+-{
+-#define COPY_REG(x) dst->x = src->x
+-	COPY_REG(r15);
+-	COPY_REG(r14);
+-	COPY_REG(r13);
+-	COPY_REG(r12);
+-	COPY_REG(rbp);
+-	COPY_REG(rbx);
+-	COPY_REG(r11);
+-	COPY_REG(r10);
+-	COPY_REG(r9);
+-	COPY_REG(r8);
+-	COPY_REG(rax);
+-	COPY_REG(rcx);
+-	COPY_REG(rdx);
+-	COPY_REG(rsi);
+-	COPY_REG(rdi);
+-#undef COPY_REG
+-}
+-
+ static
+ int
+ kpatch_execute_remote_func(struct kpatch_ptrace_ctx *pctx,
+-- 
+2.23.0
+

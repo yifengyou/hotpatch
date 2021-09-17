@@ -1,0 +1,191 @@
+From 335b90a54e629e0dc2f954ec2c3bd0b7e149aeec Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Mon, 12 Oct 2020 16:55:27 +0800
+Subject: [PATCH 44/89] kpatch_ptrace: Split function kpatch_syscall_remote
+
+The function kpatch_syscall_remote is arch related, first
+rename it with kpatch_arch_syscall_remote, and then make
+separate definations in arch/x86/arch_ptrace.c and arch/aarch64/arch_ptrace.c
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/arch/aarch64/arch_ptrace.c | 31 ++++++++++++++++++++++++++++++-
+ src/arch/x86/arch_ptrace.c     | 31 ++++++++++++++++++++++++++++++-
+ src/include/kpatch_ptrace.h    |  5 +++++
+ src/kpatch_ptrace.c            | 33 ++-------------------------------
+ 4 files changed, 67 insertions(+), 33 deletions(-)
+
+diff --git a/src/arch/aarch64/arch_ptrace.c b/src/arch/aarch64/arch_ptrace.c
+index 735927e..a444285 100644
+--- a/src/arch/aarch64/arch_ptrace.c
++++ b/src/arch/aarch64/arch_ptrace.c
+@@ -22,6 +22,35 @@
+ 
+ #include <gelf.h>
+ 
++int kpatch_arch_syscall_remote(struct kpatch_ptrace_ctx *pctx, int nr,
++		unsigned long arg1, unsigned long arg2, unsigned long arg3,
++		unsigned long arg4, unsigned long arg5, unsigned long arg6,
++		unsigned long *res)
++{
++	struct user_regs_struct regs;
++
++	unsigned char syscall[] = {
++		0x01, 0x00, 0x00, 0xd4, //0xd4000001 svc #0  = syscall
++		0xa0, 0x00, 0x20, 0xd4, //0xd42000a0 brk #5  = int3
++	};
++	int ret;
++
++	kpdebug("Executing syscall %d (pid %d)...\n", nr, pctx->pid);
++	regs.regs[8] = (unsigned long)nr;
++	regs.regs[0] = arg1;
++	regs.regs[1] = arg2;
++	regs.regs[2] = arg3;
++	regs.regs[3] = arg4;
++	regs.regs[4] = arg5;
++	regs.regs[5] = arg6;
++
++	ret = kpatch_execute_remote(pctx, syscall, sizeof(syscall), &regs);
++	if (ret == 0)
++		*res = regs.regs[0];
++
++	return ret;
++}
++
+ int kpatch_arch_prctl_remote(struct kpatch_ptrace_ctx *pctx, int code, unsigned long *addr)
+ {
+ 	struct user_regs_struct regs;
+@@ -46,7 +75,7 @@ int kpatch_arch_prctl_remote(struct kpatch_ptrace_ctx *pctx, int code, unsigned
+ 		kplogerror("can't peek original stack data\n");
+ 		return -1;
+ 	}
+-	//ret = kpatch_syscall_remote(pctx, __NR_arch_prctl, code, regs.sp, 0, 0, 0, 0, &res);
++	//ret = kpatch_arch_syscall_remote(pctx, __NR_arch_prctl, code, regs.sp, 0, 0, 0, 0, &res);
+ 	if (ret < 0)
+ 		goto poke;
+ 	if (ret == 0 && res >= (unsigned long)-MAX_ERRNO) {
+diff --git a/src/arch/x86/arch_ptrace.c b/src/arch/x86/arch_ptrace.c
+index 5f1e703..10127a3 100644
+--- a/src/arch/x86/arch_ptrace.c
++++ b/src/arch/x86/arch_ptrace.c
+@@ -22,6 +22,35 @@
+ 
+ #include <gelf.h>
+ 
++int kpatch_arch_syscall_remote(struct kpatch_ptrace_ctx *pctx, int nr,
++		unsigned long arg1, unsigned long arg2, unsigned long arg3,
++		unsigned long arg4, unsigned long arg5, unsigned long arg6,
++		unsigned long *res)
++{
++	struct user_regs_struct regs;
++
++	unsigned char syscall[] = {
++		0x0f, 0x05, /* syscall */
++		0xcc, /* int3 */
++	};
++	int ret;
++
++	kpdebug("Executing syscall %d (pid %d)...\n", nr, pctx->pid);
++	regs.rax = (unsigned long)nr;
++	regs.rdi = arg1;
++	regs.rsi = arg2;
++	regs.rdx = arg3;
++	regs.r10 = arg4;
++	regs.r8 = arg5;
++	regs.r9 = arg6;
++
++	ret = kpatch_execute_remote(pctx, syscall, sizeof(syscall), &regs);
++	if (ret == 0)
++		*res = regs.rax;
++
++	return ret;
++}
++
+ int kpatch_arch_prctl_remote(struct kpatch_ptrace_ctx *pctx, int code, unsigned long *addr)
+ {
+ 	struct user_regs_struct regs;
+@@ -42,7 +71,7 @@ int kpatch_arch_prctl_remote(struct kpatch_ptrace_ctx *pctx, int code, unsigned
+ 		kplogerror("can't peek original stack data\n");
+ 		return -1;
+ 	}
+-	ret = kpatch_syscall_remote(pctx, __NR_arch_prctl, code, regs.rsp, 0, 0, 0, 0, &res);
++	ret = kpatch_arch_syscall_remote(pctx, __NR_arch_prctl, code, regs.rsp, 0, 0, 0, 0, &res);
+ 	if (ret < 0)
+ 		goto poke;
+ 	if (ret == 0 && res >= (unsigned long)-MAX_ERRNO) {
+diff --git a/src/include/kpatch_ptrace.h b/src/include/kpatch_ptrace.h
+index ddaa9e6..c8cfd41 100644
+--- a/src/include/kpatch_ptrace.h
++++ b/src/include/kpatch_ptrace.h
+@@ -136,4 +136,9 @@ kpatch_arch_execute_remote_func(struct kpatch_ptrace_ctx *pctx,
+ 				       void *data),
+ 			   void *data);
+ 
++int kpatch_arch_syscall_remote(struct kpatch_ptrace_ctx *pctx, int nr,
++		unsigned long arg1, unsigned long arg2, unsigned long arg3,
++		unsigned long arg4, unsigned long arg5, unsigned long arg6,
++		unsigned long *res);
++
+ #endif
+diff --git a/src/kpatch_ptrace.c b/src/kpatch_ptrace.c
+index 4d2223e..057b08a 100644
+--- a/src/kpatch_ptrace.c
++++ b/src/kpatch_ptrace.c
+@@ -643,35 +643,6 @@ kpatch_ptrace_kickstart_execve_wrapper(kpatch_process_t *proc)
+ 	return 0;
+ }
+ 
+-static int kpatch_syscall_remote(struct kpatch_ptrace_ctx *pctx, int nr,
+-		unsigned long arg1, unsigned long arg2, unsigned long arg3,
+-		unsigned long arg4, unsigned long arg5, unsigned long arg6,
+-		unsigned long *res)
+-{
+-	struct user_regs_struct regs;
+-
+-	unsigned char syscall[] = {
+-		0x0f, 0x05, /* syscall */
+-		0xcc, /* int3 */
+-	};
+-	int ret;
+-
+-	kpdebug("Executing syscall %d (pid %d)...\n", nr, pctx->pid);
+-	regs.rax = (unsigned long)nr;
+-	regs.rdi = arg1;
+-	regs.rsi = arg2;
+-	regs.rdx = arg3;
+-	regs.r10 = arg4;
+-	regs.r8 = arg5;
+-	regs.r9 = arg6;
+-
+-	ret = kpatch_execute_remote(pctx, syscall, sizeof(syscall), &regs);
+-	if (ret == 0)
+-		*res = regs.rax;
+-
+-	return ret;
+-}
+-
+ unsigned long
+ kpatch_mmap_remote(struct kpatch_ptrace_ctx *pctx,
+ 		   unsigned long addr,
+@@ -686,7 +657,7 @@ kpatch_mmap_remote(struct kpatch_ptrace_ctx *pctx,
+ 
+ 	kpdebug("mmap_remote: 0x%lx+%lx, %x, %x, %d, %lx\n", addr, length,
+ 		prot, flags, fd, offset);
+-	ret = kpatch_syscall_remote(pctx, __NR_mmap, (unsigned long)addr,
++	ret = kpatch_arch_syscall_remote(pctx, __NR_mmap, (unsigned long)addr,
+ 				    length, prot, flags, fd, offset, &res);
+ 	if (ret < 0)
+ 		return 0;
+@@ -705,7 +676,7 @@ int kpatch_munmap_remote(struct kpatch_ptrace_ctx *pctx,
+ 	unsigned long res;
+ 
+ 	kpdebug("munmap_remote: 0x%lx+%lx\n", addr, length);
+-	ret = kpatch_syscall_remote(pctx, __NR_munmap, (unsigned long)addr,
++	ret = kpatch_arch_syscall_remote(pctx, __NR_munmap, (unsigned long)addr,
+ 				    length, 0, 0, 0, 0, &res);
+ 	if (ret < 0)
+ 		return -1;
+-- 
+2.23.0
+

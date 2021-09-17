@@ -1,0 +1,30 @@
+From 066da27aaf6b153c215bee353e7190fe226f5b3b Mon Sep 17 00:00:00 2001
+From: Pavel Boldin <pboldin@cloudlinux.com>
+Date: Thu, 14 Dec 2017 18:02:15 +0200
+Subject: [PATCH 08/89] pkgbuild: use yumdownloader if source url is missing
+
+Signed-off-by: Pavel Boldin <pboldin@cloudlinux.com>
+---
+ scripts/pkgbuild | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/pkgbuild b/scripts/pkgbuild
+index 8803db3..97c78a9 100755
+--- a/scripts/pkgbuild
++++ b/scripts/pkgbuild
+@@ -105,7 +105,11 @@ kp_prepare_source_raw() {
+ 
+ kp_download_source_rpm() {
+ 	mkdir -p /kcdata
+-	curl $KP_PROJECT_SOURCE_URL -o /kcdata/$KP_PROJECT_SOURCE
++	if test -n "$KP_PROJECT_SOURCE_URL"; then
++		curl $KP_PROJECT_SOURCE_URL -o /kcdata/$KP_PROJECT_SOURCE
++	else
++		yumdownloader --source --destdir /kcdata ${KP_PROJECT_SOURCE%.src.rpm}
++	fi
+ }
+ 
+ kp_prepare_source_rpm() {
+-- 
+2.23.0
+

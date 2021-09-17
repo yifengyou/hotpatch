@@ -1,0 +1,328 @@
+From e312d7a74924d6e3880fa27adb4bcd04c8c25983 Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Mon, 12 Oct 2020 16:30:58 +0800
+Subject: [PATCH 41/89] kpatch_ptrace: Split function
+ kpatch_execute_remote_func
+
+The function kpatch_execute_remote_func is arch related, first
+rename it with kpatch_arch_execute_remote_func, and the make separate
+definations in arch/x86/arch_ptrace.c and arch/aarch64/arch_ptrace.c
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/arch/aarch64/arch_ptrace.c | 87 ++++++++++++++++++++++++++++++++++
+ src/arch/x86/arch_ptrace.c     | 79 ++++++++++++++++++++++++++++++
+ src/include/kpatch_ptrace.h    |  9 ++++
+ src/kpatch_ptrace.c            | 82 +-------------------------------
+ 4 files changed, 176 insertions(+), 81 deletions(-)
+
+diff --git a/src/arch/aarch64/arch_ptrace.c b/src/arch/aarch64/arch_ptrace.c
+index 0366d4f..821b4e8 100644
+--- a/src/arch/aarch64/arch_ptrace.c
++++ b/src/arch/aarch64/arch_ptrace.c
+@@ -22,6 +22,93 @@
+ 
+ #include <gelf.h>
+ 
++int
++kpatch_arch_execute_remote_func(struct kpatch_ptrace_ctx *pctx,
++			   const unsigned char *code,
++			   size_t codelen,
++			   struct user_regs_struct *pregs,
++			   int (*func)(struct kpatch_ptrace_ctx *pctx,
++				       void *data),
++			   void *data)
++{
++	struct user_regs_struct orig_regs, regs;
++	struct iovec orig_regs_iov, regs_iov;
++
++	orig_regs_iov.iov_base = &orig_regs;
++	orig_regs_iov.iov_len = sizeof(orig_regs);
++	regs_iov.iov_base = &regs;
++	regs_iov.iov_len = sizeof(regs);
++
++	unsigned char orig_code[codelen];
++	int ret;
++	kpatch_process_t *proc = pctx->proc;
++	unsigned long libc_base = proc->libc_base;
++
++
++	ret = ptrace(PTRACE_GETREGSET, pctx->pid, (void*)NT_PRSTATUS, (void*)&orig_regs_iov);
++	if (ret < 0) {
++		kplogerror("can't get regs - %d\n", pctx->pid);
++		return -1;
++	}
++	ret = kpatch_process_mem_read(
++			      proc,
++			      libc_base,
++			      (unsigned long *)orig_code,
++			      codelen);
++	if (ret < 0) {
++		kplogerror("can't peek original code - %d\n", pctx->pid);
++		return -1;
++	}
++	ret = kpatch_process_mem_write(
++			      proc,
++			      (unsigned long *)code,
++			      libc_base,
++			      codelen);
++	if (ret < 0) {
++		kplogerror("can't poke syscall code - %d\n", pctx->pid);
++		goto poke_back;
++	}
++
++	regs = orig_regs;
++	regs.pc = libc_base;
++
++	copy_regs(&regs, pregs);
++
++	ret = ptrace(PTRACE_SETREGSET, pctx->pid, (void*)NT_PRSTATUS, (void*)&regs_iov);
++	if (ret < 0) {
++		kplogerror("can't set regs - %d\n", pctx->pid);
++		goto poke_back;
++	}
++
++	ret = func(pctx, data);
++	if (ret < 0) {
++		kplogerror("failed call to func\n");
++		goto poke_back;
++	}
++
++	ret = ptrace(PTRACE_GETREGSET, pctx->pid, (void*)NT_PRSTATUS, (void*)&regs_iov);
++	if (ret < 0) {
++		kplogerror("can't get updated regs - %d\n", pctx->pid);
++		goto poke_back;
++	}
++
++	ret = ptrace(PTRACE_SETREGSET, pctx->pid, (void*)NT_PRSTATUS, (void*)&orig_regs_iov);
++	if (ret < 0) {
++		kplogerror("can't restore regs - %d\n", pctx->pid);
++		goto poke_back;
++	}
++
++	*pregs = regs;
++
++poke_back:
++	kpatch_process_mem_write(
++			proc,
++			(unsigned long *)orig_code,
++			libc_base,
++			codelen);
++	return ret;
++}
++
+ void copy_regs(struct user_regs_struct *dst,
+ 		      struct user_regs_struct *src)
+ {
+diff --git a/src/arch/x86/arch_ptrace.c b/src/arch/x86/arch_ptrace.c
+index fa23757..9239f52 100644
+--- a/src/arch/x86/arch_ptrace.c
++++ b/src/arch/x86/arch_ptrace.c
+@@ -22,6 +22,85 @@
+ 
+ #include <gelf.h>
+ 
++int
++kpatch_arch_execute_remote_func(struct kpatch_ptrace_ctx *pctx,
++			   const unsigned char *code,
++			   size_t codelen,
++			   struct user_regs_struct *pregs,
++			   int (*func)(struct kpatch_ptrace_ctx *pctx,
++				       void *data),
++			   void *data)
++{
++	struct user_regs_struct orig_regs, regs;
++	unsigned char orig_code[codelen];
++	int ret;
++	kpatch_process_t *proc = pctx->proc;
++	unsigned long libc_base = proc->libc_base;
++
++	ret = ptrace(PTRACE_GETREGS, pctx->pid, NULL, &orig_regs);
++	if (ret < 0) {
++		kplogerror("can't get regs - %d\n", pctx->pid);
++		return -1;
++	}
++	ret = kpatch_process_mem_read(
++			      proc,
++			      libc_base,
++			      (unsigned long *)orig_code,
++			      codelen);
++	if (ret < 0) {
++		kplogerror("can't peek original code - %d\n", pctx->pid);
++		return -1;
++	}
++	ret = kpatch_process_mem_write(
++			      proc,
++			      (unsigned long *)code,
++			      libc_base,
++			      codelen);
++	if (ret < 0) {
++		kplogerror("can't poke syscall code - %d\n", pctx->pid);
++		goto poke_back;
++	}
++
++	regs = orig_regs;
++	regs.rip = libc_base;
++
++	copy_regs(&regs, pregs);
++
++	ret = ptrace(PTRACE_SETREGS, pctx->pid, NULL, &regs);
++	if (ret < 0) {
++		kplogerror("can't set regs - %d\n", pctx->pid);
++		goto poke_back;
++	}
++
++	ret = func(pctx, data);
++	if (ret < 0) {
++		kplogerror("failed call to func\n");
++		goto poke_back;
++	}
++
++	ret = ptrace(PTRACE_GETREGS, pctx->pid, NULL, &regs);
++	if (ret < 0) {
++		kplogerror("can't get updated regs - %d\n", pctx->pid);
++		goto poke_back;
++	}
++
++	ret = ptrace(PTRACE_SETREGS, pctx->pid, NULL, &orig_regs);
++	if (ret < 0) {
++		kplogerror("can't restore regs - %d\n", pctx->pid);
++		goto poke_back;
++	}
++
++	*pregs = regs;
++
++poke_back:
++	kpatch_process_mem_write(
++			proc,
++			(unsigned long *)orig_code,
++			libc_base,
++			codelen);
++	return ret;
++}
++
+ void copy_regs(struct user_regs_struct *dst,
+ 		      struct user_regs_struct *src)
+ {
+diff --git a/src/include/kpatch_ptrace.h b/src/include/kpatch_ptrace.h
+index e434d68..f35aabd 100644
+--- a/src/include/kpatch_ptrace.h
++++ b/src/include/kpatch_ptrace.h
+@@ -125,4 +125,13 @@ kpatch_arch_ptrace_waitpid(kpatch_process_t *proc,
+ void copy_regs(struct user_regs_struct *dst,
+ 		      struct user_regs_struct *src);
+ 
++int
++kpatch_arch_execute_remote_func(struct kpatch_ptrace_ctx *pctx,
++			   const unsigned char *code,
++			   size_t codelen,
++			   struct user_regs_struct *pregs,
++			   int (*func)(struct kpatch_ptrace_ctx *pctx,
++				       void *data),
++			   void *data);
++
+ #endif
+diff --git a/src/kpatch_ptrace.c b/src/kpatch_ptrace.c
+index 180bbaa..9056815 100644
+--- a/src/kpatch_ptrace.c
++++ b/src/kpatch_ptrace.c
+@@ -413,86 +413,6 @@ poke_back:
+ 	return ret;
+ }
+ 
+-static
+-int
+-kpatch_execute_remote_func(struct kpatch_ptrace_ctx *pctx,
+-			   const unsigned char *code,
+-			   size_t codelen,
+-			   struct user_regs_struct *pregs,
+-			   int (*func)(struct kpatch_ptrace_ctx *pctx,
+-				       void *data),
+-			   void *data)
+-{
+-	struct user_regs_struct orig_regs, regs;
+-	unsigned char orig_code[codelen];
+-	int ret;
+-	kpatch_process_t *proc = pctx->proc;
+-	unsigned long libc_base = proc->libc_base;
+-
+-	ret = ptrace(PTRACE_GETREGS, pctx->pid, NULL, &orig_regs);
+-	if (ret < 0) {
+-		kplogerror("can't get regs - %d\n", pctx->pid);
+-		return -1;
+-	}
+-	ret = kpatch_process_mem_read(
+-			      proc,
+-			      libc_base,
+-			      (unsigned long *)orig_code,
+-			      codelen);
+-	if (ret < 0) {
+-		kplogerror("can't peek original code - %d\n", pctx->pid);
+-		return -1;
+-	}
+-	ret = kpatch_process_mem_write(
+-			      proc,
+-			      (unsigned long *)code,
+-			      libc_base,
+-			      codelen);
+-	if (ret < 0) {
+-		kplogerror("can't poke syscall code - %d\n", pctx->pid);
+-		goto poke_back;
+-	}
+-
+-	regs = orig_regs;
+-	regs.rip = libc_base;
+-
+-	copy_regs(&regs, pregs);
+-
+-	ret = ptrace(PTRACE_SETREGS, pctx->pid, NULL, &regs);
+-	if (ret < 0) {
+-		kplogerror("can't set regs - %d\n", pctx->pid);
+-		goto poke_back;
+-	}
+-
+-	ret = func(pctx, data);
+-	if (ret < 0) {
+-		kplogerror("failed call to func\n");
+-		goto poke_back;
+-	}
+-
+-	ret = ptrace(PTRACE_GETREGS, pctx->pid, NULL, &regs);
+-	if (ret < 0) {
+-		kplogerror("can't get updated regs - %d\n", pctx->pid);
+-		goto poke_back;
+-	}
+-
+-	ret = ptrace(PTRACE_SETREGS, pctx->pid, NULL, &orig_regs);
+-	if (ret < 0) {
+-		kplogerror("can't restore regs - %d\n", pctx->pid);
+-		goto poke_back;
+-	}
+-
+-	*pregs = regs;
+-
+-poke_back:
+-	kpatch_process_mem_write(
+-			proc,
+-			(unsigned long *)orig_code,
+-			libc_base,
+-			codelen);
+-	return ret;
+-}
+-
+ static int
+ wait_for_stop(struct kpatch_ptrace_ctx *pctx,
+ 	      void *data)
+@@ -592,7 +512,7 @@ kpatch_execute_remote(struct kpatch_ptrace_ctx *pctx,
+ 		      size_t codelen,
+ 		      struct user_regs_struct *pregs)
+ {
+-	return kpatch_execute_remote_func(pctx,
++	return kpatch_arch_execute_remote_func(pctx,
+ 					  code,
+ 					  codelen,
+ 					  pregs,
+-- 
+2.23.0
+

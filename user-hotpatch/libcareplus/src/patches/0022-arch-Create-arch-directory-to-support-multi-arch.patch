@@ -1,0 +1,73 @@
+From b0d5f7f4e15bd19e7dc055b3f24171a3b14aa445 Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Sat, 10 Oct 2020 16:59:16 +0800
+Subject: [PATCH 22/89] arch: Create arch directory to support multi-arch
+
+Create directory arch/aarch64 and arch/x86 hold arch-related source files.
+Create arch-related source files in libcare.
+Files list below are architecture dependent:
+    arch_coro.c
+    arch_elf.c
+    arch_parse.c
+    arch_patch.c
+    arch_ptrace.c
+    arch_process.c
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/arch/aarch64/arch_coro.c   | 0
+ src/arch/aarch64/arch_elf.c    | 0
+ src/arch/aarch64/arch_parse.c  | 0
+ src/arch/aarch64/arch_patch.c  | 0
+ src/arch/aarch64/arch_ptrace.c | 0
+ src/arch/x86/arch_coro.c       | 0
+ src/arch/x86/arch_elf.c        | 0
+ src/arch/x86/arch_parse.c      | 0
+ src/arch/x86/arch_patch.c      | 0
+ src/arch/x86/arch_ptrace.c     | 0
+ 10 files changed, 0 insertions(+), 0 deletions(-)
+ create mode 100644 src/arch/aarch64/arch_coro.c
+ create mode 100644 src/arch/aarch64/arch_elf.c
+ create mode 100644 src/arch/aarch64/arch_parse.c
+ create mode 100644 src/arch/aarch64/arch_patch.c
+ create mode 100644 src/arch/aarch64/arch_ptrace.c
+ create mode 100644 src/arch/x86/arch_coro.c
+ create mode 100644 src/arch/x86/arch_elf.c
+ create mode 100644 src/arch/x86/arch_parse.c
+ create mode 100644 src/arch/x86/arch_patch.c
+ create mode 100644 src/arch/x86/arch_ptrace.c
+
+diff --git a/src/arch/aarch64/arch_coro.c b/src/arch/aarch64/arch_coro.c
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/arch/aarch64/arch_elf.c b/src/arch/aarch64/arch_elf.c
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/arch/aarch64/arch_parse.c b/src/arch/aarch64/arch_parse.c
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/arch/aarch64/arch_patch.c b/src/arch/aarch64/arch_patch.c
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/arch/aarch64/arch_ptrace.c b/src/arch/aarch64/arch_ptrace.c
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/arch/x86/arch_coro.c b/src/arch/x86/arch_coro.c
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/arch/x86/arch_elf.c b/src/arch/x86/arch_elf.c
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/arch/x86/arch_parse.c b/src/arch/x86/arch_parse.c
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/arch/x86/arch_patch.c b/src/arch/x86/arch_patch.c
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/arch/x86/arch_ptrace.c b/src/arch/x86/arch_ptrace.c
+new file mode 100644
+index 0000000..e69de29
+-- 
+2.23.0
+

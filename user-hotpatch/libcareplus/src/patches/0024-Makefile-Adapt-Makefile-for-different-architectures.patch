@@ -1,0 +1,72 @@
+From d12c8e57c24649e6c8c74e6dc72f02f54e82aea7 Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Tue, 13 Oct 2020 14:55:53 +0800
+Subject: [PATCH 24/89] Makefile: Adapt Makefile for different architectures
+
+First take the arch information from config file. Then compile the
+right file accroding to the architecture and find right header file
+postion from src/include.
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/Makefile | 21 +++++++++++++++------
+ 1 file changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/src/Makefile b/src/Makefile
+index 58e942a..9108a02 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -7,8 +7,10 @@ TARGETS = kpatch_gensrc \
+ 	  libcare-stresstest
+ DEBUG = yes # comment out this line if not debug
+ 
++SRC_PATH := $(shell pwd)
++
+ CC = gcc
+-CFLAGS_MISC = -Wall -g -O2 -D_GNU_SOURCE
++CFLAGS_MISC = -Wall -g -O2 -D_GNU_SOURCE -I $(SRC_PATH)
+ 
+ cc-option = $(shell if $(CC) $(CFLAGS_MISC) $(1) -S -o /dev/null -xc /dev/null \
+ 		> /dev/null 2>&1; then echo "$(1)"; else echo "$(2)"; fi ;)
+@@ -18,6 +20,13 @@ CFLAGS_WARN += $(call cc-option,-Wno-builtin-macro-redefined)
+ CFLAGS_WARN += $(call cc-option,-Wno-deprecated-declarations)
+ CFLAGS = $(CFLAGS_MISC) $(CFLAGS_WARN)
+ 
++ARCH := $(shell cat arch.desc)
++ifeq ($(ARCH),aarch64)
++VPATH = arch/aarch64
++else
++VPATH = arch/x86
++endif
++
+ ifdef DEBUG
+ CFLAGS += -DDEBUG -O0 -g
+ endif
+@@ -30,18 +39,18 @@ all: $(TARGETS)
+ 
+ .SUFFIXES:
+ 
+-kpatch_gensrc: kpatch_gensrc.o kpatch_dbgfilter.o kpatch_parse.o kpatch_io.o rbtree.o kpatch_log.o
++kpatch_gensrc: kpatch_gensrc.o kpatch_dbgfilter.o kpatch_parse.o kpatch_io.o rbtree.o kpatch_log.o arch_parse.o
+ kpatch_make: kpatch_make.o
+ 
+ LIBUNWIND_LIBS := $(shell pkg-config --libs libunwind libunwind-ptrace)
+ 
+ 
+-libcare-ctl: kpatch_user.o kpatch_storage.o kpatch_patch.c kpatch_elf.o kpatch_ptrace.o kpatch_coro.o 
+-libcare-ctl: kpatch_process.o kpatch_common.o rbtree.o kpatch_log.o
++libcare-ctl: kpatch_user.o kpatch_storage.o kpatch_patch.o kpatch_elf.o kpatch_ptrace.o kpatch_coro.o arch_patch.o arch_elf.o arch_ptrace.o arch_coro.o
++libcare-ctl: kpatch_process.o kpatch_common.o rbtree.o kpatch_log.o arch_process.o
+ libcare-ctl: LDLIBS += -lelf -lrt $(LIBUNWIND_LIBS)
+ 
+-libcare-stresstest: kpatch_user-stresstest.o kpatch_storage.o kpatch_patch.c kpatch_elf.o kpatch_ptrace.o kpatch_coro.o
+-libcare-stresstest: kpatch_process.o kpatch_common.o rbtree.o kpatch_log.o
++libcare-stresstest: kpatch_user-stresstest.o kpatch_storage.o kpatch_patch.o kpatch_elf.o kpatch_ptrace.o kpatch_coro.o arch_patch.o arch_elf.o arch_ptrace.o arch_coro.o
++libcare-stresstest: kpatch_process.o kpatch_common.o rbtree.o kpatch_log.o arch_process.o
+ libcare-stresstest: LDLIBS += -lelf -lrt $(LIBUNWIND_LIBS)
+ 
+ libcare-client: libcare-client.o
+-- 
+2.23.0
+

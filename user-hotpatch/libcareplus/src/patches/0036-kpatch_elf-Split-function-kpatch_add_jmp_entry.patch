@@ -1,0 +1,151 @@
+From 3352c27078a63b5bfc6ff4df639489fdabfd4dbe Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Mon, 12 Oct 2020 15:11:05 +0800
+Subject: [PATCH 36/89] kpatch_elf: Split function kpatch_add_jmp_entry
+
+The function kpatch_add_jmp_entry is arch related. To support multi-arch
+let's rename it with kpatch_arch_add_jmp_entry, and make the defination in
+arch/x86/arch_elf.c and arch/aarch64/arch_elf.c
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/arch/aarch64/arch_elf.c | 35 +++++++++++++++++++++++++++++++++++
+ src/arch/x86/arch_elf.c     | 35 +++++++++++++++++++++++++++++++++++
+ src/include/kpatch_elf.h    |  2 ++
+ src/kpatch_elf.c            | 21 +--------------------
+ 4 files changed, 73 insertions(+), 20 deletions(-)
+
+diff --git a/src/arch/aarch64/arch_elf.c b/src/arch/aarch64/arch_elf.c
+index e69de29..b977489 100644
+--- a/src/arch/aarch64/arch_elf.c
++++ b/src/arch/aarch64/arch_elf.c
+@@ -0,0 +1,35 @@
++#include <stdlib.h>
++#include <string.h>
++#include <stdio.h>
++#include <unistd.h>
++#include <sys/mman.h>
++#include <limits.h>
++
++#include <gelf.h>
++
++#include "include/kpatch_common.h"
++#include "include/kpatch_user.h"
++#include "include/kpatch_process.h"
++#include "include/kpatch_elf.h"
++#include "include/kpatch_file.h"
++#include "include/kpatch_ptrace.h"
++#include "include/kpatch_log.h"
++
++#define JMP_TABLE_JUMP  0xd61f022058000051 /*  ldr x17 #8; br x17 */
++unsigned long kpatch_arch_add_jmp_entry(struct object_file *o, unsigned long addr)
++{
++	struct kpatch_jmp_table_entry entry = {JMP_TABLE_JUMP, addr};
++	int e;
++
++	if (o->jmp_table == NULL) {
++		kpfatalerror("JMP TABLE not found\n");
++		return 0;
++	}
++
++	if (o->jmp_table->cur_entry >= o->jmp_table->max_entry)
++		return 0;
++	e = o->jmp_table->cur_entry++;
++	o->jmp_table->entries[e] = entry;
++	return (unsigned long)(o->kpta + o->kpfile.patch->jmp_offset + \
++			((void *)&o->jmp_table->entries[e] - (void *)o->jmp_table));
++}
+diff --git a/src/arch/x86/arch_elf.c b/src/arch/x86/arch_elf.c
+index e69de29..ef5564e 100644
+--- a/src/arch/x86/arch_elf.c
++++ b/src/arch/x86/arch_elf.c
+@@ -0,0 +1,35 @@
++#include <stdlib.h>
++#include <string.h>
++#include <stdio.h>
++#include <unistd.h>
++#include <sys/mman.h>
++#include <limits.h>
++
++#include <gelf.h>
++
++#include "include/kpatch_common.h"
++#include "include/kpatch_user.h"
++#include "include/kpatch_process.h"
++#include "include/kpatch_elf.h"
++#include "include/kpatch_file.h"
++#include "include/kpatch_ptrace.h"
++#include "include/kpatch_log.h"
++
++#define JMP_TABLE_JUMP  0x90900000000225ff /* jmp [rip+2]; nop; nop */
++unsigned long kpatch_arch_add_jmp_entry(struct object_file *o, unsigned long addr)
++{
++	struct kpatch_jmp_table_entry entry = {JMP_TABLE_JUMP, addr};
++	int e;
++
++	if (o->jmp_table == NULL) {
++		kpfatalerror("JMP TABLE not found\n");
++		return 0;
++	}
++
++	if (o->jmp_table->cur_entry >= o->jmp_table->max_entry)
++		return 0;
++	e = o->jmp_table->cur_entry++;
++	o->jmp_table->entries[e] = entry;
++	return (unsigned long)(o->kpta + o->kpfile.patch->jmp_offset + \
++			((void *)&o->jmp_table->entries[e] - (void *)o->jmp_table));
++}
+diff --git a/src/include/kpatch_elf.h b/src/include/kpatch_elf.h
+index 8c0a4a4..7e5d8c3 100644
+--- a/src/include/kpatch_elf.h
++++ b/src/include/kpatch_elf.h
+@@ -43,4 +43,6 @@ struct kpatch_jmp_table {
+ 	struct kpatch_jmp_table_entry entries[0];
+ };
+ 
++unsigned long kpatch_arch_add_jmp_entry(struct object_file *o, unsigned long addr);
++
+ #endif
+diff --git a/src/kpatch_elf.c b/src/kpatch_elf.c
+index b1dfed0..21ba496 100644
+--- a/src/kpatch_elf.c
++++ b/src/kpatch_elf.c
+@@ -686,25 +686,6 @@ kpatch_resolve_undefined(struct object_file *obj,
+ 	return addr;
+ }
+ 
+-#define JMP_TABLE_JUMP  0x90900000000225ff /* jmp [rip+2]; nop; nop */
+-static unsigned long kpatch_add_jmp_entry(struct object_file *o, unsigned long addr)
+-{
+-	struct kpatch_jmp_table_entry entry = {JMP_TABLE_JUMP, addr};
+-	int e;
+-
+-	if (o->jmp_table == NULL) {
+-		kpfatalerror("JMP TABLE not found\n");
+-		return 0;
+-	}
+-
+-	if (o->jmp_table->cur_entry >= o->jmp_table->max_entry)
+-		return 0;
+-	e = o->jmp_table->cur_entry++;
+-	o->jmp_table->entries[e] = entry;
+-	return (unsigned long)(o->kpta + o->kpfile.patch->jmp_offset + \
+-			((void *)&o->jmp_table->entries[e] - (void *)o->jmp_table));
+-}
+-
+ static inline int
+ symbol_resolve(struct object_file *o,
+ 	       GElf_Shdr *shdr,
+@@ -737,7 +718,7 @@ symbol_resolve(struct object_file *o,
+ 			}
+ 			/* OK, we overuse st_size to store original offset */
+ 			s->st_size = uaddr;
+-			s->st_value = kpatch_add_jmp_entry(o, uaddr);
++			s->st_value = kpatch_arch_add_jmp_entry(o, uaddr);
+ 
+ 			kpdebug("symbol '%s' = 0x%lx\n",
+ 				symname, uaddr);
+-- 
+2.23.0
+

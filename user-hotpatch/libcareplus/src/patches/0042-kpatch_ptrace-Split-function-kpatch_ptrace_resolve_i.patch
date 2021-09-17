@@ -1,0 +1,146 @@
+From aeeded44db6e705717bd24f3ffbbe878af47833b Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Mon, 12 Oct 2020 16:40:42 +0800
+Subject: [PATCH 42/89] kpatch_ptrace: Split function
+ kpatch_ptrace_resolve_ifunc
+
+The function kpatch_ptrace_resolve_ifunc is arch related, first
+rename it with kpatch_arch_ptrace_resolve_ifunc, and then make
+separate definations in arch/x86/arch_ptrace.c and arch/aarch64/arch_ptrace.c
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/arch/aarch64/arch_ptrace.c | 20 ++++++++++++++++++++
+ src/arch/x86/arch_ptrace.c     | 21 +++++++++++++++++++++
+ src/include/kpatch_ptrace.h    |  2 +-
+ src/kpatch_elf.c               |  4 ++--
+ src/kpatch_ptrace.c            | 21 ---------------------
+ 5 files changed, 44 insertions(+), 24 deletions(-)
+
+diff --git a/src/arch/aarch64/arch_ptrace.c b/src/arch/aarch64/arch_ptrace.c
+index 821b4e8..4dee0e5 100644
+--- a/src/arch/aarch64/arch_ptrace.c
++++ b/src/arch/aarch64/arch_ptrace.c
+@@ -22,6 +22,26 @@
+ 
+ #include <gelf.h>
+ 
++int kpatch_arch_ptrace_resolve_ifunc(struct kpatch_ptrace_ctx *pctx,
++                unsigned long *addr)
++{
++    struct user_regs_struct regs;
++
++    unsigned char callrax[] = {
++        0x00, 0x01, 0x3f, 0xd6, // blr x8
++        0xa0, 0x00, 0x20, 0xd4, // brk #5
++    };
++    int ret;
++    kpdebug("Executing callrax %lx (pid %d)\n", *addr, pctx->pid);
++    regs.regs[8] = *addr;
++
++    ret = kpatch_execute_remote(pctx, callrax, sizeof(callrax), &regs);
++    if (ret == 0)
++        *addr = regs.regs[0];
++
++    return ret;
++}
++
+ int
+ kpatch_arch_execute_remote_func(struct kpatch_ptrace_ctx *pctx,
+ 			   const unsigned char *code,
+diff --git a/src/arch/x86/arch_ptrace.c b/src/arch/x86/arch_ptrace.c
+index 9239f52..3d49638 100644
+--- a/src/arch/x86/arch_ptrace.c
++++ b/src/arch/x86/arch_ptrace.c
+@@ -22,6 +22,27 @@
+ 
+ #include <gelf.h>
+ 
++int kpatch_arch_ptrace_resolve_ifunc(struct kpatch_ptrace_ctx *pctx,
++				unsigned long *addr)
++{
++	struct user_regs_struct regs;
++
++	unsigned char callrax[] = {
++		0xff, 0xd0, /* call *%rax */
++		0xcc, /* int3 */
++	};
++	int ret;
++
++	kpdebug("Executing callrax %lx (pid %d)\n", *addr, pctx->pid);
++	regs.rax = *addr;
++
++	ret = kpatch_execute_remote(pctx, callrax, sizeof(callrax), &regs);
++	if (ret == 0)
++		*addr = regs.rax;
++
++	return ret;
++}
++
+ int
+ kpatch_arch_execute_remote_func(struct kpatch_ptrace_ctx *pctx,
+ 			   const unsigned char *code,
+diff --git a/src/include/kpatch_ptrace.h b/src/include/kpatch_ptrace.h
+index f35aabd..19a1b2c 100644
+--- a/src/include/kpatch_ptrace.h
++++ b/src/include/kpatch_ptrace.h
+@@ -70,7 +70,7 @@ int kpatch_execute_remote(struct kpatch_ptrace_ctx *pctx,
+ 			  size_t codelen,
+ 			  struct user_regs_struct *pregs);
+ 
+-int kpatch_ptrace_resolve_ifunc(struct kpatch_ptrace_ctx *pctx,
++int kpatch_arch_ptrace_resolve_ifunc(struct kpatch_ptrace_ctx *pctx,
+ 				unsigned long *addr);
+ unsigned long
+ kpatch_mmap_remote(struct kpatch_ptrace_ctx *pctx,
+diff --git a/src/kpatch_elf.c b/src/kpatch_elf.c
+index 5506292..d443001 100644
+--- a/src/kpatch_elf.c
++++ b/src/kpatch_elf.c
+@@ -677,8 +677,8 @@ kpatch_resolve_undefined(struct object_file *obj,
+ 		addr = vaddr2addr(o, addr);
+ 
+ 		if (type == STT_GNU_IFUNC)
+-			if (kpatch_ptrace_resolve_ifunc(proc2pctx(obj->proc), &addr) < 0)
+-				kpfatalerror("kpatch_ptrace_resolve_ifunc failed\n");
++			if (kpatch_arch_ptrace_resolve_ifunc(proc2pctx(obj->proc), &addr) < 0)
++				kpfatalerror("kpatch_arch_ptrace_resolve_ifunc failed\n");
+ 
+ 		break;
+ 	}
+diff --git a/src/kpatch_ptrace.c b/src/kpatch_ptrace.c
+index 9056815..cd961e1 100644
+--- a/src/kpatch_ptrace.c
++++ b/src/kpatch_ptrace.c
+@@ -672,27 +672,6 @@ static int kpatch_syscall_remote(struct kpatch_ptrace_ctx *pctx, int nr,
+ 	return ret;
+ }
+ 
+-int kpatch_ptrace_resolve_ifunc(struct kpatch_ptrace_ctx *pctx,
+-				unsigned long *addr)
+-{
+-	struct user_regs_struct regs;
+-
+-	unsigned char callrax[] = {
+-		0xff, 0xd0, /* call *%rax */
+-		0xcc, /* int3 */
+-	};
+-	int ret;
+-
+-	kpdebug("Executing callrax %lx (pid %d)\n", *addr, pctx->pid);
+-	regs.rax = *addr;
+-
+-	ret = kpatch_execute_remote(pctx, callrax, sizeof(callrax), &regs);
+-	if (ret == 0)
+-		*addr = regs.rax;
+-
+-	return ret;
+-}
+-
+ #define MAX_ERRNO	4095
+ unsigned long
+ kpatch_mmap_remote(struct kpatch_ptrace_ctx *pctx,
+-- 
+2.23.0
+

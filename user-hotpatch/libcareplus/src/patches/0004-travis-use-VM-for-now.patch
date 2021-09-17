@@ -1,0 +1,71 @@
+From f4b6b37575e514f3e54f08166dc14e35815a8ebb Mon Sep 17 00:00:00 2001
+From: Pavel Boldin <pboldin@cloudlinux.com>
+Date: Tue, 30 Jan 2018 08:15:11 +0200
+Subject: [PATCH 04/89] travis: use VM for now
+
+Attaching even to a children process is broken in travis's Docker.
+Use VM until https://github.com/travis-ci/travis-ci/issues/9033
+is fixed.
+
+Signed-off-by: Pavel Boldin <pboldin@cloudlinux.com>
+---
+ .travis.yml        |  2 +-
+ Makefile           |  2 +-
+ tests/run_tests.sh | 18 +++++++++++++++++-
+ 3 files changed, 19 insertions(+), 3 deletions(-)
+
+diff --git a/.travis.yml b/.travis.yml
+index 4bb2614..f3ccb4e 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -3,7 +3,7 @@ script: make tests
+ language: c
+ 
+ dist: trusty
+-sudo: false
++sudo: required
+ 
+ addons:
+   apt:
+diff --git a/Makefile b/Makefile
+index 2da227f..c5a2837 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,4 +1,4 @@
+-
++#dummy
+ 
+ all: src
+ 
+diff --git a/tests/run_tests.sh b/tests/run_tests.sh
+index fcfcd56..fbfb273 100755
+--- a/tests/run_tests.sh
++++ b/tests/run_tests.sh
+@@ -3,7 +3,23 @@
+ set -e
+ 
+ wait_file() {
+-	while ! test -s $1; do sleep ${2-1}; done
++	local file="$1"
++	local pause="${2-1}"
++	local i=0
++	local timeout=60
++
++	while test $i -lt $timeout; do
++		if test -s $file; then
++			break
++		fi
++		sleep $pause
++		i=$((i + 1))
++	done
++
++	if test $i -eq $timeout; then
++		return 1
++	fi
++
+ 	return 0
+ }
+ 
+-- 
+2.23.0
+

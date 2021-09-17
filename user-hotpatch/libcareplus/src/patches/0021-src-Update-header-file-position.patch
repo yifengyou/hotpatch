@@ -1,0 +1,373 @@
+From 64f163e9bd26b0af65f12e7cc4205da0d787e7fc Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Sat, 10 Oct 2020 16:50:15 +0800
+Subject: [PATCH 21/89] src: Update header file position
+
+Update header file positon with include prefix to source file in src directory.
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/kpatch_common.c      |  6 +++---
+ src/kpatch_coro.c        | 12 ++++++------
+ src/kpatch_dbgfilter.c   |  6 +++---
+ src/kpatch_elf.c         | 14 +++++++-------
+ src/kpatch_elf_objinfo.c |  6 +++---
+ src/kpatch_gensrc.c      |  8 ++++----
+ src/kpatch_io.c          |  6 +++---
+ src/kpatch_log.c         |  2 +-
+ src/kpatch_make.c        |  2 +-
+ src/kpatch_parse.c       |  6 +++---
+ src/kpatch_patch.c       | 20 ++++++++++----------
+ src/kpatch_process.c     | 14 +++++++-------
+ src/kpatch_ptrace.c      |  8 ++++----
+ src/kpatch_storage.c     | 14 +++++++-------
+ src/kpatch_strip.c       |  8 ++++----
+ src/kpatch_user.c        | 18 +++++++++---------
+ src/rbtree.c             |  2 +-
+ 17 files changed, 76 insertions(+), 76 deletions(-)
+
+diff --git a/src/kpatch_common.c b/src/kpatch_common.c
+index 99bc0b3..95d4a54 100644
+--- a/src/kpatch_common.c
++++ b/src/kpatch_common.c
+@@ -6,9 +6,9 @@
+ #include <errno.h>
+ #include <unistd.h>
+ 
+-#include "kpatch_file.h"
+-#include "kpatch_common.h"
+-#include "kpatch_log.h"
++#include "include/kpatch_file.h"
++#include "include/kpatch_common.h"
++#include "include/kpatch_log.h"
+ 
+ int kpatch_openat_file(int atfd, const char *fname, struct kp_file *kpatch)
+ {
+diff --git a/src/kpatch_coro.c b/src/kpatch_coro.c
+index 45d4a0b..02d421b 100644
+--- a/src/kpatch_coro.c
++++ b/src/kpatch_coro.c
+@@ -8,12 +8,12 @@
+ 
+ #include <asm/prctl.h>
+ 
+-#include "kpatch_user.h"
+-#include "kpatch_coro.h"
+-#include "kpatch_common.h"
+-#include "kpatch_elf.h"
+-#include "kpatch_ptrace.h"
+-#include "kpatch_log.h"
++#include "include/kpatch_user.h"
++#include "include/kpatch_coro.h"
++#include "include/kpatch_common.h"
++#include "include/kpatch_elf.h"
++#include "include/kpatch_ptrace.h"
++#include "include/kpatch_log.h"
+ 
+ /* Indicates that the next CORO flavours should be tried */
+ #define CORO_SEARCH_NEXT	(1<<31)
+diff --git a/src/kpatch_dbgfilter.c b/src/kpatch_dbgfilter.c
+index 73a9bc3..d385c18 100644
+--- a/src/kpatch_dbgfilter.c
++++ b/src/kpatch_dbgfilter.c
+@@ -1,9 +1,9 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ 
+-#include "kpatch_parse.h"
+-#include "kpatch_str.h"
+-#include "kpatch_dbgfilter.h"
++#include "include/kpatch_parse.h"
++#include "include/kpatch_str.h"
++#include "include/kpatch_dbgfilter.h"
+ 
+ static int is_cold_hot(char *s)
+ {
+diff --git a/src/kpatch_elf.c b/src/kpatch_elf.c
+index e42642b..b1dfed0 100644
+--- a/src/kpatch_elf.c
++++ b/src/kpatch_elf.c
+@@ -7,13 +7,13 @@
+ 
+ #include <gelf.h>
+ 
+-#include "kpatch_common.h"
+-#include "kpatch_user.h"
+-#include "kpatch_process.h"
+-#include "kpatch_elf.h"
+-#include "kpatch_file.h"
+-#include "kpatch_ptrace.h"
+-#include "kpatch_log.h"
++#include "include/kpatch_common.h"
++#include "include/kpatch_user.h"
++#include "include/kpatch_process.h"
++#include "include/kpatch_elf.h"
++#include "include/kpatch_file.h"
++#include "include/kpatch_ptrace.h"
++#include "include/kpatch_log.h"
+ 
+ static int
+ elf_object_peek_phdr(struct object_file *o)
+diff --git a/src/kpatch_elf_objinfo.c b/src/kpatch_elf_objinfo.c
+index 65b7144..c967c37 100644
+--- a/src/kpatch_elf_objinfo.c
++++ b/src/kpatch_elf_objinfo.c
+@@ -4,9 +4,9 @@
+ 
+ #include <gelf.h>
+ 
+-#include "kpatch_common.h"
+-#include "kpatch_elf_objinfo.h"
+-#include "kpatch_log.h"
++#include "include/kpatch_common.h"
++#include "include/kpatch_elf_objinfo.h"
++#include "include/kpatch_log.h"
+ 
+ const char *kpatch_objinfo_strptr(kpatch_objinfo *oi, int type, size_t nameidx)
+ {
+diff --git a/src/kpatch_gensrc.c b/src/kpatch_gensrc.c
+index a15fa2c..a16b652 100644
+--- a/src/kpatch_gensrc.c
++++ b/src/kpatch_gensrc.c
+@@ -4,10 +4,10 @@
+ #include <stdarg.h>
+ #include <getopt.h>
+ 
+-#include "kpatch_log.h"
+-#include "kpatch_parse.h"
+-#include "kpatch_dbgfilter.h"
+-#include "kpatch_flags.h"
++#include "include/kpatch_log.h"
++#include "include/kpatch_parse.h"
++#include "include/kpatch_dbgfilter.h"
++#include "include/kpatch_flags.h"
+ 
+ #define OS_RHEL5 1
+ #define OS_RHEL6 2
+diff --git a/src/kpatch_io.c b/src/kpatch_io.c
+index 663bed0..7bdc298 100644
+--- a/src/kpatch_io.c
++++ b/src/kpatch_io.c
+@@ -4,9 +4,9 @@
+ #include <errno.h>
+ #include <libgen.h>
+ 
+-#include "kpatch_log.h"
+-#include "kpatch_io.h"
+-#include "kpatch_str.h"
++#include "include/kpatch_log.h"
++#include "include/kpatch_io.h"
++#include "include/kpatch_str.h"
+ 
+ void *kp_realloc(void *p, int oldsz, int newsz)
+ {
+diff --git a/src/kpatch_log.c b/src/kpatch_log.c
+index de80f7b..6e48de4 100644
+--- a/src/kpatch_log.c
++++ b/src/kpatch_log.c
+@@ -4,7 +4,7 @@
+ #include <string.h>
+ #include <errno.h>
+ 
+-#include "kpatch_log.h"
++#include "include/kpatch_log.h"
+ 
+ int log_level = LOG_INFO;
+ int log_indent;
+diff --git a/src/kpatch_make.c b/src/kpatch_make.c
+index c584b06..6a173e6 100644
+--- a/src/kpatch_make.c
++++ b/src/kpatch_make.c
+@@ -9,7 +9,7 @@
+ #include <errno.h>
+ #include <time.h>
+ 
+-#include "kpatch_file.h"
++#include "include/kpatch_file.h"
+ 
+ #define ALIGN(x, align)	((x + align - 1) & (~(align - 1)))
+ 
+diff --git a/src/kpatch_parse.c b/src/kpatch_parse.c
+index 358916b..dfb3109 100644
+--- a/src/kpatch_parse.c
++++ b/src/kpatch_parse.c
+@@ -1,8 +1,8 @@
+ #include <stdlib.h>
+ 
+-#include "kpatch_log.h"
+-#include "kpatch_parse.h"
+-#include "kpatch_flags.h"
++#include "include/kpatch_log.h"
++#include "include/kpatch_parse.h"
++#include "include/kpatch_flags.h"
+ 
+ char *cline(struct kp_file *f, int l)
+ {
+diff --git a/src/kpatch_patch.c b/src/kpatch_patch.c
+index e32c702..21a160a 100644
+--- a/src/kpatch_patch.c
++++ b/src/kpatch_patch.c
+@@ -10,16 +10,16 @@
+ #include <libunwind.h>
+ #include <libunwind-ptrace.h>
+ 
+-#include "kpatch_patch.h"
+-#include "kpatch_user.h"
+-#include "kpatch_storage.h"
+-#include "kpatch_process.h"
+-#include "kpatch_file.h"
+-#include "kpatch_common.h"
+-#include "kpatch_elf.h"
+-#include "kpatch_ptrace.h"
+-#include "list.h"
+-#include "kpatch_log.h"
++#include "include/kpatch_patch.h"
++#include "include/kpatch_user.h"
++#include "include/kpatch_storage.h"
++#include "include/kpatch_process.h"
++#include "include/kpatch_file.h"
++#include "include/kpatch_common.h"
++#include "include/kpatch_elf.h"
++#include "include/kpatch_ptrace.h"
++#include "include/list.h"
++#include "include/kpatch_log.h"
+ 
+ 
+ static inline int
+diff --git a/src/kpatch_process.c b/src/kpatch_process.c
+index 5c0374a..3f7f2f6 100644
+--- a/src/kpatch_process.c
++++ b/src/kpatch_process.c
+@@ -23,13 +23,13 @@
+ 
+ #include <sys/socket.h>
+ 
+-#include "kpatch_process.h"
+-#include "kpatch_file.h"
+-#include "kpatch_common.h"
+-#include "kpatch_elf.h"
+-#include "kpatch_ptrace.h"
+-#include "list.h"
+-#include "kpatch_log.h"
++#include "include/kpatch_process.h"
++#include "include/kpatch_file.h"
++#include "include/kpatch_common.h"
++#include "include/kpatch_elf.h"
++#include "include/kpatch_ptrace.h"
++#include "include/list.h"
++#include "include/kpatch_log.h"
+ 
+ /*
+  * Locks process by opening /proc/<pid>/maps
+diff --git a/src/kpatch_ptrace.c b/src/kpatch_ptrace.c
+index a5f61b3..8910aa8 100644
+--- a/src/kpatch_ptrace.c
++++ b/src/kpatch_ptrace.c
+@@ -15,10 +15,10 @@
+ #include <sys/types.h>
+ #include <sys/socket.h>
+ 
+-#include "kpatch_process.h"
+-#include "kpatch_common.h"
+-#include "kpatch_ptrace.h"
+-#include "kpatch_log.h"
++#include "include/kpatch_process.h"
++#include "include/kpatch_common.h"
++#include "include/kpatch_ptrace.h"
++#include "include/kpatch_log.h"
+ 
+ #include <gelf.h>
+ 
+diff --git a/src/kpatch_storage.c b/src/kpatch_storage.c
+index 2375559..9165cbf 100644
+--- a/src/kpatch_storage.c
++++ b/src/kpatch_storage.c
+@@ -10,13 +10,13 @@
+ #include <sys/wait.h>
+ #include <gelf.h>
+ 
+-#include "kpatch_storage.h"
+-#include "kpatch_file.h"
+-#include "kpatch_common.h"
+-#include "kpatch_elf.h"
+-#include "kpatch_ptrace.h"
+-#include "list.h"
+-#include "kpatch_log.h"
++#include "include/kpatch_storage.h"
++#include "include/kpatch_file.h"
++#include "include/kpatch_common.h"
++#include "include/kpatch_elf.h"
++#include "include/kpatch_ptrace.h"
++#include "include/list.h"
++#include "include/kpatch_log.h"
+ 
+ 
+ /*****************************************************************************
+diff --git a/src/kpatch_strip.c b/src/kpatch_strip.c
+index b4de32d..6ad56a3 100644
+--- a/src/kpatch_strip.c
++++ b/src/kpatch_strip.c
+@@ -7,13 +7,13 @@
+ #include <string.h>
+ #include <stdint.h>
+ #include <getopt.h>
+-#include "kpatch_file.h"
+-#include "kpatch_common.h"
++#include "include/kpatch_file.h"
++#include "include/kpatch_common.h"
+ 
+ #include <gelf.h>
+-#include "kpatch_elf_objinfo.h"
++#include "include/kpatch_elf_objinfo.h"
+ 
+-#include "kpatch_log.h"
++#include "include/kpatch_log.h"
+ 
+ #define ALIGN(off,sz) (((off)+(sz)-1)&~((sz)-1))
+ 
+diff --git a/src/kpatch_user.c b/src/kpatch_user.c
+index e6649b0..11e3408 100644
+--- a/src/kpatch_user.c
++++ b/src/kpatch_user.c
+@@ -16,15 +16,15 @@
+ #include <libunwind.h>
+ #include <libunwind-ptrace.h>
+ 
+-#include "kpatch_user.h"
+-#include "kpatch_storage.h"
+-#include "kpatch_patch.h"
+-#include "kpatch_process.h"
+-#include "kpatch_file.h"
+-#include "kpatch_common.h"
+-#include "kpatch_elf.h"
+-#include "list.h"
+-#include "kpatch_log.h"
++#include "include/kpatch_user.h"
++#include "include/kpatch_storage.h"
++#include "include/kpatch_patch.h"
++#include "include/kpatch_process.h"
++#include "include/kpatch_file.h"
++#include "include/kpatch_common.h"
++#include "include/kpatch_elf.h"
++#include "include/list.h"
++#include "include/kpatch_log.h"
+ 
+ /* Global variables */
+ static char storage_dir[PATH_MAX] = "/var/lib/libcare";
+diff --git a/src/rbtree.c b/src/rbtree.c
+index fee5844..6aff1d1 100644
+--- a/src/rbtree.c
++++ b/src/rbtree.c
+@@ -21,7 +21,7 @@
+   linux/lib/rbtree.c
+ */
+ 
+-#include "rbtree.h"
++#include "include/rbtree.h"
+ 
+ /*
+  * red-black trees properties:  http://en.wikipedia.org/wiki/Rbtree
+-- 
+2.23.0
+

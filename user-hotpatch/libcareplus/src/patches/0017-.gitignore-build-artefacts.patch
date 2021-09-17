@@ -1,0 +1,28 @@
+From 90a310f57710abb3f5e41c431d26e77fef63ad2b Mon Sep 17 00:00:00 2001
+From: Pavel Boldin <boldin.pavel@gmail.com>
+Date: Thu, 13 Sep 2018 12:00:02 +0300
+Subject: [PATCH 17/89] .gitignore build artefacts
+
+Signed-off-by: Pavel Boldin <boldin.pavel@gmail.com>
+---
+ .gitignore | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/.gitignore b/.gitignore
+index 5761abc..065f093 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1 +1,10 @@
+ *.o
++*.d
++src/kpatch_gensrc
++src/kpatch_make
++src/kpatch_strip
++src/libcare-cc
++src/libcare-client
++src/libcare-ctl
++src/libcare-stresstest
++tags
+-- 
+2.23.0
+

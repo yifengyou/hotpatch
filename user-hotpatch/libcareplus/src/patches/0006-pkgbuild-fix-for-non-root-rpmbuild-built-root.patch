@@ -1,0 +1,42 @@
+From 859be3502b57c87f3241c11d36059313cbdde46a Mon Sep 17 00:00:00 2001
+From: Pavel Boldin <pboldin@cloudlinux.com>
+Date: Tue, 31 Oct 2017 04:04:58 +0100
+Subject: [PATCH 06/89] pkgbuild: fix for non-/root/rpmbuild built root
+
+---
+ scripts/pkgbuild | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/pkgbuild b/scripts/pkgbuild
+index 3697594..e2ac7c7 100755
+--- a/scripts/pkgbuild
++++ b/scripts/pkgbuild
+@@ -120,7 +120,8 @@ kp_prepare_source_rpm() {
+ 
+ 	sed -i 's/.rpm$//g' $KP_PROJECT_BUILD_ROOT/dependencies.txt
+ 
+-	rpm -ivh /kcdata/$KP_PROJECT_SOURCE
++	rpm -ivh /kcdata/$KP_PROJECT_SOURCE \
++		--define "_topdir $KP_PROJECT_BUILD_ROOT"
+ }
+ 
+ kp_prepare_source_deb() {
+@@ -152,6 +153,7 @@ kp_prebuild_rpm() {
+ 	eval rpmbuild --nocheck --noclean 				\
+ 		-bc 							\
+ 		$KP_RPMBUILD_FLAGS					\
++		'--define "_topdir $KP_PROJECT_BUILD_ROOT"'		\
+ 		$KP_PROJECT_BUILD_ROOT/SPECS/$KP_PROJECT_SPEC 2>&1 |	\
+ 		tee $KP_PROJECT_BUILD_ROOT/prebuild.log
+ }
+@@ -237,6 +239,7 @@ kp_build_rpm() {
+ 		--short-circuit					\
+ 		-bc						\
+ 		$KP_RPMBUILD_FLAGS				\
++		'--define "_topdir $KP_PROJECT_BUILD_ROOT"'	\
+ 		$KP_PROJECT_BUILD_ROOT/SPECS/$KP_PROJECT_SPEC
+ }
+ 
+-- 
+2.23.0
+

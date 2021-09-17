@@ -1,0 +1,129 @@
+From ca5872b354b7987ce2dfd6f5268771268ad006d0 Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Sat, 10 Oct 2020 16:46:38 +0800
+Subject: [PATCH 20/89] include: Create include directory for header files
+
+Move all header files from src directory into newly created include directory
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/{ => include}/kpatch_common.h      | 0
+ src/{ => include}/kpatch_coro.h        | 0
+ src/{ => include}/kpatch_dbgfilter.h   | 0
+ src/{ => include}/kpatch_elf.h         | 0
+ src/{ => include}/kpatch_elf_objinfo.h | 0
+ src/{ => include}/kpatch_file.h        | 0
+ src/{ => include}/kpatch_flags.h       | 0
+ src/{ => include}/kpatch_io.h          | 0
+ src/{ => include}/kpatch_log.h         | 0
+ src/{ => include}/kpatch_parse.h       | 0
+ src/{ => include}/kpatch_patch.h       | 0
+ src/{ => include}/kpatch_process.h     | 0
+ src/{ => include}/kpatch_ptrace.h      | 0
+ src/{ => include}/kpatch_storage.h     | 0
+ src/{ => include}/kpatch_str.h         | 0
+ src/{ => include}/kpatch_user.h        | 0
+ src/{ => include}/list.h               | 0
+ src/{ => include}/rbtree.h             | 0
+ src/{ => include}/util.h               | 0
+ 19 files changed, 0 insertions(+), 0 deletions(-)
+ rename src/{ => include}/kpatch_common.h (100%)
+ rename src/{ => include}/kpatch_coro.h (100%)
+ rename src/{ => include}/kpatch_dbgfilter.h (100%)
+ rename src/{ => include}/kpatch_elf.h (100%)
+ rename src/{ => include}/kpatch_elf_objinfo.h (100%)
+ rename src/{ => include}/kpatch_file.h (100%)
+ rename src/{ => include}/kpatch_flags.h (100%)
+ rename src/{ => include}/kpatch_io.h (100%)
+ rename src/{ => include}/kpatch_log.h (100%)
+ rename src/{ => include}/kpatch_parse.h (100%)
+ rename src/{ => include}/kpatch_patch.h (100%)
+ rename src/{ => include}/kpatch_process.h (100%)
+ rename src/{ => include}/kpatch_ptrace.h (100%)
+ rename src/{ => include}/kpatch_storage.h (100%)
+ rename src/{ => include}/kpatch_str.h (100%)
+ rename src/{ => include}/kpatch_user.h (100%)
+ rename src/{ => include}/list.h (100%)
+ rename src/{ => include}/rbtree.h (100%)
+ rename src/{ => include}/util.h (100%)
+
+diff --git a/src/kpatch_common.h b/src/include/kpatch_common.h
+similarity index 100%
+rename from src/kpatch_common.h
+rename to src/include/kpatch_common.h
+diff --git a/src/kpatch_coro.h b/src/include/kpatch_coro.h
+similarity index 100%
+rename from src/kpatch_coro.h
+rename to src/include/kpatch_coro.h
+diff --git a/src/kpatch_dbgfilter.h b/src/include/kpatch_dbgfilter.h
+similarity index 100%
+rename from src/kpatch_dbgfilter.h
+rename to src/include/kpatch_dbgfilter.h
+diff --git a/src/kpatch_elf.h b/src/include/kpatch_elf.h
+similarity index 100%
+rename from src/kpatch_elf.h
+rename to src/include/kpatch_elf.h
+diff --git a/src/kpatch_elf_objinfo.h b/src/include/kpatch_elf_objinfo.h
+similarity index 100%
+rename from src/kpatch_elf_objinfo.h
+rename to src/include/kpatch_elf_objinfo.h
+diff --git a/src/kpatch_file.h b/src/include/kpatch_file.h
+similarity index 100%
+rename from src/kpatch_file.h
+rename to src/include/kpatch_file.h
+diff --git a/src/kpatch_flags.h b/src/include/kpatch_flags.h
+similarity index 100%
+rename from src/kpatch_flags.h
+rename to src/include/kpatch_flags.h
+diff --git a/src/kpatch_io.h b/src/include/kpatch_io.h
+similarity index 100%
+rename from src/kpatch_io.h
+rename to src/include/kpatch_io.h
+diff --git a/src/kpatch_log.h b/src/include/kpatch_log.h
+similarity index 100%
+rename from src/kpatch_log.h
+rename to src/include/kpatch_log.h
+diff --git a/src/kpatch_parse.h b/src/include/kpatch_parse.h
+similarity index 100%
+rename from src/kpatch_parse.h
+rename to src/include/kpatch_parse.h
+diff --git a/src/kpatch_patch.h b/src/include/kpatch_patch.h
+similarity index 100%
+rename from src/kpatch_patch.h
+rename to src/include/kpatch_patch.h
+diff --git a/src/kpatch_process.h b/src/include/kpatch_process.h
+similarity index 100%
+rename from src/kpatch_process.h
+rename to src/include/kpatch_process.h
+diff --git a/src/kpatch_ptrace.h b/src/include/kpatch_ptrace.h
+similarity index 100%
+rename from src/kpatch_ptrace.h
+rename to src/include/kpatch_ptrace.h
+diff --git a/src/kpatch_storage.h b/src/include/kpatch_storage.h
+similarity index 100%
+rename from src/kpatch_storage.h
+rename to src/include/kpatch_storage.h
+diff --git a/src/kpatch_str.h b/src/include/kpatch_str.h
+similarity index 100%
+rename from src/kpatch_str.h
+rename to src/include/kpatch_str.h
+diff --git a/src/kpatch_user.h b/src/include/kpatch_user.h
+similarity index 100%
+rename from src/kpatch_user.h
+rename to src/include/kpatch_user.h
+diff --git a/src/list.h b/src/include/list.h
+similarity index 100%
+rename from src/list.h
+rename to src/include/list.h
+diff --git a/src/rbtree.h b/src/include/rbtree.h
+similarity index 100%
+rename from src/rbtree.h
+rename to src/include/rbtree.h
+diff --git a/src/util.h b/src/include/util.h
+similarity index 100%
+rename from src/util.h
+rename to src/include/util.h
+-- 
+2.23.0
+

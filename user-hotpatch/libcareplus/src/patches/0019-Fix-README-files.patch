@@ -1,0 +1,51 @@
+From 43e10a5ef1db3c56a872e3a61edaf224b51822f0 Mon Sep 17 00:00:00 2001
+From: Pavel Artsishevsky <polter.rnd@gmail.com>
+Date: Tue, 18 Feb 2020 15:21:26 +0300
+Subject: [PATCH 19/89] Fix README files
+
+- Update patch build instructions for GHOST sample;
+- Add Travis CI status image to main readme file.
+---
+ README.rst               |  3 +++
+ samples/ghost/README.rst | 11 +++++++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/README.rst b/README.rst
+index 927325d..932b7c5 100644
+--- a/README.rst
++++ b/README.rst
+@@ -1,6 +1,9 @@
+ LibCare -- Patch Userspace Code on Live Processes
+ =================================================
+ 
++.. image:: https://travis-ci.org/cloudlinux/libcare.svg?branch=master
++    :target: https://travis-ci.org/cloudlinux/libcare
++
+ Welcome to LibCare --- Live Patch Updates for Userspace Processes and Libraries.
+ 
+ LibCare delivers live patches to any of your Linux executables or libraries at
+diff --git a/samples/ghost/README.rst b/samples/ghost/README.rst
+index da97926..e274b54 100644
+--- a/samples/ghost/README.rst
++++ b/samples/ghost/README.rst
+@@ -32,6 +32,17 @@ Now, from inside the container let's install vulnerable version of glibc:
+                 glibc-headers-2.17-55.el7 glibc-common-2.17-55.el7
+         ...
+ 
++Also we have to downgrade elfutils since newer versions of ``eu-unstrip``
++fail to work with glibc utilities:
++
++.. code:: console
++
++        [root@... /]# yum downgrade -y --enablerepo=C7.0.1406-base \
++                elfutils-devel-0.158-3.el7.x86_64 elfutils-0.158-3.el7.x86_64 \
++                elfutils-libs-0.158-3.el7.x86_64 elfutils-libelf-0.158-3.el7.x86_64 \
++                elfutils-libelf-devel-0.158-3.el7.x86_64
++        ...
++
+ Build the ``libcare`` tools:
+ 
+ .. code:: console
+-- 
+2.23.0
+

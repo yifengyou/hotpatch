@@ -1,0 +1,31 @@
+From 48a7b69f85710e1db33db994e79fdcd568ceacda Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Mon, 12 Oct 2020 10:53:28 +0800
+Subject: [PATCH 25/89] kpatch_parse: Update asm_directives for aarch64
+
+Update asm_directives in kpatch_parse.c, because
+the golbal identifier in x86 is ".globl"
+which is different from the ".global"in aarch64.
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/kpatch_parse.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/kpatch_parse.c b/src/kpatch_parse.c
+index dfb3109..44e8a60 100644
+--- a/src/kpatch_parse.c
++++ b/src/kpatch_parse.c
+@@ -82,6 +82,8 @@ static struct {
+ 	{ DIRECTIVE_SUBSECTION, ".subsection"},
+ 
+ 	{ DIRECTIVE_GLOBL, ".globl"},
++	{ DIRECTIVE_GLOBL, ".global"},
++
+ 	{ DIRECTIVE_LOCAL, ".local"},
+ 	{ DIRECTIVE_HIDDEN, ".hidden"},
+ 	{ DIRECTIVE_PROTECTED, ".protected"},
+-- 
+2.23.0
+

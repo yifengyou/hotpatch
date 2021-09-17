@@ -1,0 +1,401 @@
+From f53cbbe63cbe16b2b0eb0466b5c85ea35f68da2b Mon Sep 17 00:00:00 2001
+From: Jiajie Li <lijiajie11@huawei.com>
+Date: Tue, 13 Oct 2020 11:22:27 +0800
+Subject: [PATCH 46/89] kpatch_ptrace: Split function
+ kpatch_ptrace_kickstart_execve_wrapper
+
+The function kpatch_ptrace_kickstart_execve_wrapper is arch related,
+first rename it with kpatch_arch_ptrace_kickstart_execve_wrapper,
+and then make separate definations in arch/x86/arch_ptrace.c and
+arch/aarch64/arch_ptrace.c
+
+Signed-off-by: Jiajie Li <lijiajie11@huawei.com>
+Signed-off-by: Ying Fang <fangying1@huawei.com>
+---
+ src/arch/aarch64/arch_ptrace.c |  99 +++++++++++++++++++++++++++++++
+ src/arch/x86/arch_ptrace.c     |  99 +++++++++++++++++++++++++++++++
+ src/include/kpatch_ptrace.h    |   5 +-
+ src/kpatch_process.c           |   2 +-
+ src/kpatch_ptrace.c            | 103 +--------------------------------
+ 5 files changed, 205 insertions(+), 103 deletions(-)
+
+diff --git a/src/arch/aarch64/arch_ptrace.c b/src/arch/aarch64/arch_ptrace.c
+index b21189e..9f87d10 100644
+--- a/src/arch/aarch64/arch_ptrace.c
++++ b/src/arch/aarch64/arch_ptrace.c
+@@ -22,6 +22,105 @@
+ 
+ #include <gelf.h>
+ 
++/**
++ * This is rather tricky since we are accounting for the non-main
++ * thread calling for execve(). See `ptrace(2)` for details.
++ *
++ * FIXME(pboldin): this is broken for multi-threaded calls
++ * to execve. Sight.
++ */
++int
++kpatch_arch_ptrace_kickstart_execve_wrapper(kpatch_process_t *proc)
++{
++	int ret, pid = 0;
++	struct kpatch_ptrace_ctx *pctx, *ptmp, *execve_pctx = NULL;
++	long rv;
++
++	kpdebug("kpatch_arch_ptrace_kickstart_execve_wrapper\n");
++
++	list_for_each_entry(pctx, &proc->ptrace.pctxs, list) {
++		/* proc->pid equals to THREAD ID of the thread
++		 * executing execve.so's version of execve
++		 */
++		if (pctx->pid != proc->pid)
++			continue;
++		execve_pctx = pctx;
++		break;
++	}
++
++	if (execve_pctx == NULL) {
++		kperr("can't find thread executing execve");
++		return -1;
++	}
++
++	/* Send a message to our `execve` wrapper so it will continue
++	 * execution
++	 */
++	ret = send(proc->send_fd, &ret, sizeof(ret), 0);
++	if (ret < 0) {
++		kplogerror("send failed\n");
++		return ret;
++	}
++
++	/* Wait for it to reach BRKN instruction just before real execve */
++	while (1) {
++		ret = wait_for_stop(execve_pctx, NULL);
++		if (ret < 0) {
++			kplogerror("wait_for_stop\n");
++			return ret;
++		}
++
++		rv = ptrace(PTRACE_PEEKUSER, execve_pctx->pid,
++			    offsetof(struct user_regs_struct, pc),
++			    NULL);
++		if (rv == -1)
++			return rv;
++
++		rv = ptrace(PTRACE_PEEKTEXT, execve_pctx->pid,
++			    rv - 1, NULL);
++		if (rv == -1)
++			return rv;
++		if ((unsigned char)rv == 0xcc)
++			break;
++	}
++
++	/* Wait for SIGTRAP from the execve. It happens from the thread
++	 * group ID, so find it if thread doing execve() is not it. */
++	if (execve_pctx != proc2pctx(proc)) {
++		pid = get_threadgroup_id(proc->pid);
++		if (pid < 0)
++			return -1;
++
++		proc->pid = pid;
++	}
++
++	ret = wait_for_stop(execve_pctx, (void *)(uintptr_t)pid);
++	if (ret < 0) {
++		kplogerror("waitpid\n");
++		return ret;
++	}
++
++	list_for_each_entry_safe(pctx, ptmp, &proc->ptrace.pctxs, list) {
++		if (pctx->pid == proc->pid)
++			continue;
++		kpatch_ptrace_detach(pctx);
++		kpatch_ptrace_ctx_destroy(pctx);
++	}
++
++	/* Suddenly, /proc/pid/mem gets invalidated */
++	{
++		char buf[128];
++		close(proc->memfd);
++
++		snprintf(buf, sizeof(buf), "/proc/%d/mem", proc->pid);
++		proc->memfd = open(buf, O_RDWR);
++	}
++
++	kpdebug("...done\n");
++
++	return 0;
++}
++
+ int
+ wait_for_mmap(struct kpatch_ptrace_ctx *pctx,
+ 	      unsigned long *pbase)
+diff --git a/src/arch/x86/arch_ptrace.c b/src/arch/x86/arch_ptrace.c
+index 0032cbd..ef0f460 100644
+--- a/src/arch/x86/arch_ptrace.c
++++ b/src/arch/x86/arch_ptrace.c
+@@ -22,6 +22,105 @@
+ 
+ #include <gelf.h>
+ 
++/**
++ * This is rather tricky since we are accounting for the non-main
++ * thread calling for execve(). See `ptrace(2)` for details.
++ *
++ * FIXME(pboldin): this is broken for multi-threaded calls
++ * to execve. Sight.
++ */
++int
++kpatch_arch_ptrace_kickstart_execve_wrapper(kpatch_process_t *proc)
++{
++	int ret, pid = 0;
++	struct kpatch_ptrace_ctx *pctx, *ptmp, *execve_pctx = NULL;
++	long rv;
++
++	kpdebug("kpatch_arch_ptrace_kickstart_execve_wrapper\n");
++
++	list_for_each_entry(pctx, &proc->ptrace.pctxs, list) {
++		/* proc->pid equals to THREAD ID of the thread
++		 * executing execve.so's version of execve
++		 */
++		if (pctx->pid != proc->pid)
++			continue;
++		execve_pctx = pctx;
++		break;
++	}
++
++	if (execve_pctx == NULL) {
++		kperr("can't find thread executing execve");
++		return -1;
++	}
++
++	/* Send a message to our `execve` wrapper so it will continue
++	 * execution
++	 */
++	ret = send(proc->send_fd, &ret, sizeof(ret), 0);
++	if (ret < 0) {
++		kplogerror("send failed\n");
++		return ret;
++	}
++
++	/* Wait for it to reach BRKN instruction just before real execve */
++	while (1) {
++		ret = wait_for_stop(execve_pctx, NULL);
++		if (ret < 0) {
++			kplogerror("wait_for_stop\n");
++			return ret;
++		}
++
++		rv = ptrace(PTRACE_PEEKUSER, execve_pctx->pid,
++			    offsetof(struct user_regs_struct, rip),
++			    NULL);
++		if (rv == -1)
++			return rv;
++
++		rv = ptrace(PTRACE_PEEKTEXT, execve_pctx->pid,
++			    rv - 1, NULL);
++		if (rv == -1)
++			return rv;
++		if ((unsigned char)rv == 0xcc)
++			break;
++	}
++
++	/* Wait for SIGTRAP from the execve. It happens from the thread
++	 * group ID, so find it if thread doing execve() is not it. */
++	if (execve_pctx != proc2pctx(proc)) {
++		pid = get_threadgroup_id(proc->pid);
++		if (pid < 0)
++			return -1;
++
++		proc->pid = pid;
++	}
++
++	ret = wait_for_stop(execve_pctx, (void *)(uintptr_t)pid);
++	if (ret < 0) {
++		kplogerror("waitpid\n");
++		return ret;
++	}
++
++	list_for_each_entry_safe(pctx, ptmp, &proc->ptrace.pctxs, list) {
++		if (pctx->pid == proc->pid)
++			continue;
++		kpatch_ptrace_detach(pctx);
++		kpatch_ptrace_ctx_destroy(pctx);
++	}
++
++	/* Suddenly, /proc/pid/mem gets invalidated */
++	{
++		char buf[128];
++		close(proc->memfd);
++
++		snprintf(buf, sizeof(buf), "/proc/%d/mem", proc->pid);
++		proc->memfd = open(buf, O_RDWR);
++	}
++
++	kpdebug("...done\n");
++
++	return 0;
++}
++
+ int
+ wait_for_mmap(struct kpatch_ptrace_ctx *pctx,
+ 	      unsigned long *pbase)
+diff --git a/src/include/kpatch_ptrace.h b/src/include/kpatch_ptrace.h
+index 5abcf26..f0e83c0 100644
+--- a/src/include/kpatch_ptrace.h
++++ b/src/include/kpatch_ptrace.h
+@@ -55,7 +55,10 @@ int kpatch_ptrace_detach(struct kpatch_ptrace_ctx *pctx);
+ int kpatch_ptrace_handle_ld_linux(kpatch_process_t *proc,
+ 				  unsigned long *pentry_point);
+ 
+-int kpatch_ptrace_kickstart_execve_wrapper(kpatch_process_t *proc);
++
++int wait_for_stop(struct kpatch_ptrace_ctx *pctx, void *data);
++int get_threadgroup_id(int tid);
++int kpatch_arch_ptrace_kickstart_execve_wrapper(kpatch_process_t *proc);
+ int kpatch_ptrace_get_entry_point(struct kpatch_ptrace_ctx *pctx,
+ 				  unsigned long *pentry_point);
+ 
+diff --git a/src/kpatch_process.c b/src/kpatch_process.c
+index 9561962..f987b7e 100644
+--- a/src/kpatch_process.c
++++ b/src/kpatch_process.c
+@@ -856,7 +856,7 @@ kpatch_process_kickstart_execve_wrapper(kpatch_process_t *proc)
+ {
+ 	int ret;
+ 
+-	ret = kpatch_ptrace_kickstart_execve_wrapper(proc);
++	ret = kpatch_arch_ptrace_kickstart_execve_wrapper(proc);
+ 	if (ret < 0)
+ 		return -1;
+ 
+diff --git a/src/kpatch_ptrace.c b/src/kpatch_ptrace.c
+index 7ab550c..d0bfbdd 100644
+--- a/src/kpatch_ptrace.c
++++ b/src/kpatch_ptrace.c
+@@ -413,7 +413,7 @@ poke_back:
+ 	return ret;
+ }
+ 
+-static int
++int
+ wait_for_stop(struct kpatch_ptrace_ctx *pctx,
+ 	      void *data)
+ {
+@@ -463,7 +463,7 @@ kpatch_execute_remote(struct kpatch_ptrace_ctx *pctx,
+ }
+ 
+ /* FIXME(pboldin) buf might be too small */
+-static int
++int
+ get_threadgroup_id(int tid)
+ {
+ 	FILE *fh;
+@@ -486,105 +486,6 @@ get_threadgroup_id(int tid)
+ 	return pid;
+ }
+ 
+-/**
+- * This is rather tricky since we are accounting for the non-main
+- * thread calling for execve(). See `ptrace(2)` for details.
+- *
+- * FIXME(pboldin): this is broken for multi-threaded calls
+- * to execve. Sight.
+- */
+-int
+-kpatch_ptrace_kickstart_execve_wrapper(kpatch_process_t *proc)
+-{
+-	int ret, pid = 0;
+-	struct kpatch_ptrace_ctx *pctx, *ptmp, *execve_pctx = NULL;
+-	long rv;
+-
+-	kpdebug("kpatch_ptrace_kickstart_execve_wrapper\n");
+-
+-	list_for_each_entry(pctx, &proc->ptrace.pctxs, list) {
+-		/* proc->pid equals to THREAD ID of the thread
+-		 * executing execve.so's version of execve
+-		 */
+-		if (pctx->pid != proc->pid)
+-			continue;
+-		execve_pctx = pctx;
+-		break;
+-	}
+-
+-	if (execve_pctx == NULL) {
+-		kperr("can't find thread executing execve");
+-		return -1;
+-	}
+-
+-	/* Send a message to our `execve` wrapper so it will continue
+-	 * execution
+-	 */
+-	ret = send(proc->send_fd, &ret, sizeof(ret), 0);
+-	if (ret < 0) {
+-		kplogerror("send failed\n");
+-		return ret;
+-	}
+-
+-	/* Wait for it to reach BRKN instruction just before real execve */
+-	while (1) {
+-		ret = wait_for_stop(execve_pctx, NULL);
+-		if (ret < 0) {
+-			kplogerror("wait_for_stop\n");
+-			return ret;
+-		}
+-
+-		rv = ptrace(PTRACE_PEEKUSER, execve_pctx->pid,
+-			    offsetof(struct user_regs_struct, rip),
+-			    NULL);
+-		if (rv == -1)
+-			return rv;
+-
+-		rv = ptrace(PTRACE_PEEKTEXT, execve_pctx->pid,
+-			    rv - 1, NULL);
+-		if (rv == -1)
+-			return rv;
+-		if ((unsigned char)rv == 0xcc)
+-			break;
+-	}
+-
+-	/* Wait for SIGTRAP from the execve. It happens from the thread
+-	 * group ID, so find it if thread doing execve() is not it. */
+-	if (execve_pctx != proc2pctx(proc)) {
+-		pid = get_threadgroup_id(proc->pid);
+-		if (pid < 0)
+-			return -1;
+-
+-		proc->pid = pid;
+-	}
+-
+-	ret = wait_for_stop(execve_pctx, (void *)(uintptr_t)pid);
+-	if (ret < 0) {
+-		kplogerror("waitpid\n");
+-		return ret;
+-	}
+-
+-	list_for_each_entry_safe(pctx, ptmp, &proc->ptrace.pctxs, list) {
+-		if (pctx->pid == proc->pid)
+-			continue;
+-		kpatch_ptrace_detach(pctx);
+-		kpatch_ptrace_ctx_destroy(pctx);
+-	}
+-
+-	/* Suddenly, /proc/pid/mem gets invalidated */
+-	{
+-		char buf[128];
+-		close(proc->memfd);
+-
+-		snprintf(buf, sizeof(buf), "/proc/%d/mem", proc->pid);
+-		proc->memfd = open(buf, O_RDWR);
+-	}
+-
+-	kpdebug("...done\n");
+-
+-	return 0;
+-}
+-
+ unsigned long
+ kpatch_mmap_remote(struct kpatch_ptrace_ctx *pctx,
+ 		   unsigned long addr,
+-- 
+2.23.0
+
