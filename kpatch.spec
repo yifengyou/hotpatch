@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        17
+Release:        18
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -41,6 +41,8 @@ Patch0026:0026-support-remove-static-variables-using-KPATCH_IGNORE_.patch
 Patch0027:0027-create-build-diff-support-for-.cold-functions-with-n.patch
 Patch0028:0028-lookup-Add-__UNIQUE_ID_-to-maybe_discarded_sym-list.patch
 Patch0029:0029-create-diff-object-error-on-detect-new-changed-ALTIN.patch
+Patch0030:0030-kpatch-update-sympos-for-duplicate-symbols-in-vmlinu.patch
+Patch0031:0031-create-diff-object-fix-segment-fault-when-sec2-rela-.patch
 
 BuildRequires:  gcc elfutils-libelf-devel kernel-devel git
 Requires:       bc make gcc patch bison flex openssl-devel
@@ -101,6 +103,13 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Tue Sep 28 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-18
+- Type:bugfix
+- ID:NA
+- SUG:NA
+- DESC:kpatch: update sympos for duplicate symbols in vmlinux
+       create-diff-object: fix segment fault when sec2->rela is NULL
+
 * Tue Sep 28 2021 Bin Hu<hubin57@huawei.com> -1:0.9.1-17
 - Type:bugfix
 - ID:NA
