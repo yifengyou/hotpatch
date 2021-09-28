@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        16
+Release:        17
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -42,7 +42,7 @@ Patch0027:0027-create-build-diff-support-for-.cold-functions-with-n.patch
 Patch0028:0028-lookup-Add-__UNIQUE_ID_-to-maybe_discarded_sym-list.patch
 Patch0029:0029-create-diff-object-error-on-detect-new-changed-ALTIN.patch
 
-BuildRequires:  gcc elfutils-libelf-devel uname-build-checks kernel-devel git
+BuildRequires:  gcc elfutils-libelf-devel kernel-devel git
 Requires:       bc make gcc patch bison flex openssl-devel
 Recommends:     %{name}-help = %{version}-%{release}
 
@@ -101,6 +101,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Tue Sep 28 2021 Bin Hu<hubin57@huawei.com> -1:0.9.1-17
+- Type:bugfix
+- ID:NA
+- SUG:NA
+- DESC:remove uname-build-check from build dependency
+
 * Sat Aug 21 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-16
 - Type:enhancement
 - ID:NA
