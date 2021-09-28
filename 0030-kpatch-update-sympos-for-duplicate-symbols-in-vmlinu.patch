@@ -1,0 +1,104 @@
+From 8f5c1ff32fcc519bf061f68a481116f622b9cef8 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Fri, 10 Sep 2021 04:34:40 -0400
+Subject: [PATCH] kpatch: update sympos for duplicate symbols in vmlinux
+
+kallsyms in vmlinux is sorted by address, so symbol order
+in vmlinux is different from /proc/kallsyms, update sympos
+when patching duplicate symbol function.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+Signed-off-by: hubin57 <hubin57@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 26 ++++++--------------------
+ kpatch-build/lookup.c             | 24 ++++++++++++++++++++++++
+ kpatch-build/lookup.h             |  2 ++
+ 3 files changed, 32 insertions(+), 20 deletions(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index afd5e3b..ff2b0e4 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -2813,26 +2813,12 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
+ 			funcs[index].new_size = sym->sym.st_size;
+ 			funcs[index].sympos = result.pos;
+ 			if (lookup_is_duplicate_symbol(table, sym->name, objname, result.pos)) {
+-				struct lookup_refsym refsym;
+-				long offset;
+-
+-				if (lookup_ref_symbol_offset(table, sym->name, &refsym,
+-							objname, &offset))
+-					ERROR("unresolvable ambiguity on symbol %s\n", sym->name);
+-
+-				funcs[index].ref_offset = offset;
+-
+-				/*
+-				 * Add a relocation that will populate
+-				 * the funcs[index].ref_name field.
+-				 */
+-				ALLOC_LINK(rela, &relasec->relas);
+-				rela->sym = strsym;
+-				rela->type = absolute_rela_type;
+-				rela->addend = offset_of_string(&kelf->strings, refsym.name);
+-				rela->offset = (unsigned int)(index * sizeof(*funcs) +
+-					offsetof(struct kpatch_patch_func, ref_name));
+-
++				if (!strcmp(objname, "vmlinux")) {
++					result.pos = get_vmlinux_duplicate_symbol_pos(table, sym->name, result.value);
++					log_debug("update %s sympos from %ld to %ld\n",
++							sym->name, funcs[index].sympos, result.pos);
++					funcs[index].sympos = result.pos;
++				}
+ 			}
+ 
+ 
+diff --git a/kpatch-build/lookup.c b/kpatch-build/lookup.c
+index 888bcc9..aa8527d 100644
+--- a/kpatch-build/lookup.c
++++ b/kpatch-build/lookup.c
+@@ -526,6 +526,30 @@ int lookup_global_symbol(struct lookup_table *table, char *name,
+ 	return 1;
+ }
+ 
++/*
++ * In case sometimes the sympos of duplicate symbols are different in vmlinux and 
++ * /proc/kallsyms, and causes lookup_local_symbol to save wrong sympos in result, 
++ * this function returns correct sympos of the symbol, by comparing
++ * address value with the symbol in vmlinux symbol table.
++ */
++unsigned long get_vmlinux_duplicate_symbol_pos(struct lookup_table *table, 
++                                               char *name, unsigned long value)
++{
++	struct object_symbol *sym;
++	unsigned long pos = 1;
++	int i;
++
++	for_each_obj_symbol(i, sym, table) {
++		if (strcmp(sym->name, name))
++			continue;
++
++		if (sym->value < value)
++			pos++;
++	}
++
++	return pos;
++}
++
+ int lookup_is_exported_symbol(struct lookup_table *table, char *name)
+ {
+ 	struct export_symbol *sym, *match = NULL;
+diff --git a/kpatch-build/lookup.h b/kpatch-build/lookup.h
+index daeea73..c745366 100644
+--- a/kpatch-build/lookup.h
++++ b/kpatch-build/lookup.h
+@@ -37,5 +37,7 @@ int lookup_is_duplicate_symbol(struct lookup_table *table, char *name,
+ int lookup_ref_symbol_offset(struct lookup_table *table, char *name,
+ 		struct lookup_refsym *refsym, char *objname,
+ 			 long *offset);
++unsigned long get_vmlinux_duplicate_symbol_pos(struct lookup_table *table, char *name,
++                         unsigned long value);
+ 
+ #endif /* _LOOKUP_H_ */
+-- 
+2.27.0
+
