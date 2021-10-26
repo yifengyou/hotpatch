@@ -1,0 +1,32 @@
+From 81f9ca4833bf9c5867858d633c340cedca554ca6 Mon Sep 17 00:00:00 2001
+From: Josh Poimboeuf <jpoimboe@redhat.com>
+Date: Tue, 13 Apr 2021 14:00:41 -0500
+Subject: [PATCH] create-diff-object: Fix out-of-range relocation check
+
+Improve the relocation check for the case where the referenced symbol
+isn't at the beginning of the section.
+
+Note that the check still isn't perfect, as many relocations have a
+negative addend.  But it's still a lot better than nothing.
+
+Signed-off-by: Josh Poimboeuf <jpoimboe@redhat.com>
+---
+ kpatch-build/create-diff-object.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index d427beb..14eb1f5 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -2546,7 +2546,7 @@ static void kpatch_check_relocations(struct kpatch_elf *kelf)
+ 		list_for_each_entry(rela, &sec->relas, list) {
+ 			if (rela->sym->sec) {
+ 				sdata = rela->sym->sec->data;
+-				if (rela->addend > (long)sdata->d_size) {
++				if ((long)rela->sym->sym.st_value + rela->addend > (long)sdata->d_size) {
+ 					ERROR("out-of-range relocation %s+%lx in %s", rela->sym->name,
+ 							rela->addend, sec->name);
+ 				}
+-- 
+2.23.0
+

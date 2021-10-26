@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        19
+Release:        20
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -43,6 +43,9 @@ Patch0028:0028-lookup-Add-__UNIQUE_ID_-to-maybe_discarded_sym-list.patch
 Patch0029:0029-create-diff-object-error-on-detect-new-changed-ALTIN.patch
 Patch0030:0030-kpatch-update-sympos-for-duplicate-symbols-in-vmlinu.patch
 Patch0031:0031-create-diff-object-fix-segment-fault-when-sec2-rela-.patch
+Patch0032:0032-create-diff-object-Fix-out-of-range-relocation-error.patch
+Patch0033:0033-create-diff-object-Fix-out-of-range-relocation-check.patch
+Patch0034:0034-add-openEuler-build-support.patch
 
 BuildRequires:  gcc elfutils-libelf-devel kernel-devel git
 Requires:       bc make gcc patch bison flex openssl-devel
@@ -103,6 +106,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Tue Oct 26 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-20
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:backport upstream patches
+
 * Tue Oct 26 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-19
 - Type:enhancement
 - ID:NA
