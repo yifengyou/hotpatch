@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        18
+Release:        19
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -103,6 +103,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Tue Oct 26 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-19
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:support make compile environment
+
 * Tue Sep 28 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-18
 - Type:bugfix
 - ID:NA
