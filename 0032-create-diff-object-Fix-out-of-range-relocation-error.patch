@@ -1,0 +1,36 @@
+From fa5a95cafdb034b825242a93ef1b4ce57985a93d Mon Sep 17 00:00:00 2001
+From: Josh Poimboeuf <jpoimboe@redhat.com>
+Date: Tue, 13 Apr 2021 13:58:59 -0500
+Subject: [PATCH] create-diff-object: Fix out-of-range relocation error message
+
+Showing sec+addend isn't valid, show sym+addend instead.
+
+Before:
+
+  create-diff-object: ERROR: sys.o: kpatch_check_relocations: 2550: out-of-range relocation .rodata.__kpatch_do_sys_uname.str1.1+139 in .rela.text.__kpatch_do_sys_uname
+
+After:
+
+  create-diff-object: ERROR: sys.o: kpatch_check_relocations: 2550: out-of-range relocation .LC7+139 in .rela.text.__kpatch_do_sys_uname
+
+Signed-off-by: Josh Poimboeuf <jpoimboe@redhat.com>
+---
+ kpatch-build/create-diff-object.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 82e486f..d427beb 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -2547,7 +2547,7 @@ static void kpatch_check_relocations(struct kpatch_elf *kelf)
+ 			if (rela->sym->sec) {
+ 				sdata = rela->sym->sec->data;
+ 				if (rela->addend > (long)sdata->d_size) {
+-					ERROR("out-of-range relocation %s+%lx in %s", rela->sym->sec->name,
++					ERROR("out-of-range relocation %s+%lx in %s", rela->sym->name,
+ 							rela->addend, sec->name);
+ 				}
+ 			}
+-- 
+2.23.0
+
