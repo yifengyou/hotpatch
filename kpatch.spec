@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.1
-Release:        20
+Release:        21
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -46,6 +46,7 @@ Patch0031:0031-create-diff-object-fix-segment-fault-when-sec2-rela-.patch
 Patch0032:0032-create-diff-object-Fix-out-of-range-relocation-error.patch
 Patch0033:0033-create-diff-object-Fix-out-of-range-relocation-check.patch
 Patch0034:0034-add-openEuler-build-support.patch
+Patch0035:0035-livepatch-patch-hook-add-comments.patch
 
 BuildRequires:  gcc elfutils-libelf-devel kernel-devel git
 Requires:       bc make gcc patch bison flex openssl-devel
@@ -106,6 +107,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Sat Oct 30 2021 Bin Hu<hubin57@huawei.com> -1:0.9.1-21
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:backport upstream patch
+
 * Tue Oct 26 2021 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.1-20
 - Type:enhancement
 - ID:NA
