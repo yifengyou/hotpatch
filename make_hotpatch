@@ -534,7 +534,7 @@ function fn_makepatch()
 
     G_PATCH_SRC=`readlink -f $G_KERNEL_SRC`
     if [ -d "$G_MODULE_SRC" ];then
-        echo "make out of tree module hotpath"
+        echo "make out of tree module hotpatch"
         G_PATCH_SRC=$G_MODULE_SRC
         #fn_init_module_build $G_MODULE_SRC $G_MODULE_MAKEFILE
         #if [ $? -ne 0 ];then
@@ -592,6 +592,7 @@ function fn_makepatch()
     export USERMODFLAGS=`cat $G_KPATCH_FLAGS`
     export NO_PROFILING_CALLS="yes"
     export DISABLE_AFTER_LOAD="yes"
+    export KEEP_JUMP_LABEL="yes"
     UNAME_R=$(uname -r)
     UNAME_R_ARCH=${UNAME_R##*.}
     SKIP_GCC_CHECK=""
@@ -599,7 +600,7 @@ function fn_makepatch()
             echo "build in cross compile environment, skip gcc check"
             SKIP_GCC_CHECK="--skip-gcc-check"
     fi
-    kpatch-build -s $G_PATCH_SRC -c $G_KERNEL_CONFIG -v $G_VMLINUX ${SKIP_GCC_CHECK} -n "${G_PREFIX}_${G_HOTPATCH_ID}" $G_DEBUG_INFO $G_PATCHFILE
+    kpatch-build -s $G_PATCH_SRC -c $G_KERNEL_CONFIG -v $G_VMLINUX ${SKIP_GCC_CHECK} -n "${G_PREFIX}_${G_HOTPATCH_ID}" $G_DEBUG_INFO $G_PATCHFILE -R
     l_ret=$?
     cd - &>/dev/null
     if [ $l_ret -eq 0 ] && [ -f "$G_TMP_DIR/$G_HOTPATCH" ];then

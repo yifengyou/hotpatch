@@ -1,22 +1,22 @@
-From 1bc8c76085839576576fc780336fbd9d7ebd29ef Mon Sep 17 00:00:00 2001
+From 3d3cb8c0b294a60faaeb68e0d7361babdc1b8902 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Tue, 25 Feb 2020 23:40:37 -0500
-Subject: [PATCH 09/23] livepatch-patch-hook: don't active patch when insmod
+Subject: [PATCH 08/24] livepatch-patch-hook: support no active after load
 
-Don't active patch after loading the patch when
+suppport Don't active patch after loading the patch when
 DISABLE_AFTER_LOAD is set.
 
 Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
  kmod/patch/livepatch-patch-hook.c | 2 ++
- kpatch-build/kpatch-build         | 4 ++++
- 2 files changed, 6 insertions(+)
+ kpatch-build/kpatch-build         | 5 +++++
+ 2 files changed, 7 insertions(+)
 
 diff --git a/kmod/patch/livepatch-patch-hook.c b/kmod/patch/livepatch-patch-hook.c
-index 6ae40de..fb23a94 100644
+index 3d13ab9..b578ef3 100644
 --- a/kmod/patch/livepatch-patch-hook.c
 +++ b/kmod/patch/livepatch-patch-hook.c
-@@ -455,6 +455,7 @@ static int __init patch_init(void)
+@@ -576,6 +576,7 @@ static int __init patch_init(void)
  	}
  #endif
  
@@ -24,7 +24,7 @@ index 6ae40de..fb23a94 100644
  	ret = klp_enable_patch(lpatch);
  	if (ret) {
  #ifndef HAVE_SIMPLE_ENABLE
-@@ -463,6 +464,7 @@ static int __init patch_init(void)
+@@ -584,6 +585,7 @@ static int __init patch_init(void)
  		patch_free_livepatch(lpatch);
  		return ret;
  	}
@@ -33,20 +33,21 @@ index 6ae40de..fb23a94 100644
  	return 0;
  out:
 diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
-index 17a5e11..894f0ab 100755
+index ad3a079..c85e05a 100755
 --- a/kpatch-build/kpatch-build
 +++ b/kpatch-build/kpatch-build
-@@ -1053,6 +1053,10 @@ if [[ -n "$KLP_SUPPORT_LOADHOOKS" ]];then
- 	export KCPPFLAGS="-DHAVE_LOADHOOKS $KCPPFLAGS"
+@@ -1176,6 +1176,11 @@ export KCFLAGS="-I$DATADIR/patch $ARCH_KCFLAGS"
+ if [[ "$USE_KLP" -eq 0 ]]; then
+ 	export KCPPFLAGS="-D__KPATCH_MODULE__"
  fi
- 
++
 +if [[ -n "$DISABLE_AFTER_LOAD" ]];then
-+    export KCPPFLAGS="-DDISABLE_AFTER_LOAD $KCPPFLAGS"
++	export KCPPFLAGS="-DDISABLE_AFTER_LOAD $KCPPFLAGS"
 +fi
 +
- echo "Building patch module: $MODNAME.ko"
+ save_env
  
- if [[ -z "$USERSRCDIR" ]] && [[ "$DISTRO" = ubuntu ]]; then
+ echo "Building patch module: $MODNAME.ko"
 -- 
-2.18.1
+2.23.0
 

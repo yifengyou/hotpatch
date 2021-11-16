@@ -1,7 +1,8 @@
-From 0e08aa99583573953367d5c1ec21901325c7faee Mon Sep 17 00:00:00 2001
+From a81f64c1eae14f2b0da8168ca60b3d9beb0a9fb0 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Wed, 30 Dec 2020 21:13:10 -0500
-Subject: [PATCH] support remove static variables using KPATCH_IGNORE_STATIC
+Subject: [PATCH 20/24] support remove static variables using
+ KPATCH_IGNORE_STATIC
 
 Static variables will be removed due to compiler optimization.
 And some static variables can be treated as new variables, such as
@@ -10,30 +11,31 @@ to tell kpatch to treat the static variables as new variables.
 
 Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
 ---
- kmod/patch/kpatch-macros.h        |  3 +++
+ kmod/patch/kpatch-macros.h        |  4 +++
  kpatch-build/create-diff-object.c | 45 ++++++++++++++++++++++++++++++-
- 2 files changed, 47 insertions(+), 1 deletion(-)
+ 2 files changed, 48 insertions(+), 1 deletion(-)
 
 diff --git a/kmod/patch/kpatch-macros.h b/kmod/patch/kpatch-macros.h
-index a60a267..9a30d68 100644
+index caaadbc..ee455d2 100644
 --- a/kmod/patch/kpatch-macros.h
 +++ b/kmod/patch/kpatch-macros.h
-@@ -5,6 +5,9 @@
- #include <linux/jiffies.h>
- #include <linux/version.h>
+@@ -12,6 +12,10 @@
+ # define __kpatch_section(section) __section(#section)
+ #endif
  
 +#define KPATCH_IGNORE_STATIC(_static) \
 +	char *__UNIQUE_ID(kpatch_ignore_static_) __section(.kpatch.ignore.statics) = _static;
++
 +
  /*
   * KPATCH_IGNORE_SECTION macro
   *
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index a2a9cab..211ea72 100644
+index 0bef022..f83000b 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -1151,6 +1151,40 @@ static int kpatch_is_normal_static_local(struct symbol *sym)
- 	return 1;
+@@ -1345,6 +1345,40 @@ static struct rela *kpatch_find_static_twin_ref(struct section *rela_sec, struct
+ 	return NULL;
  }
  
 +static int kpatch_mark_ignored_statics(struct kpatch_elf *kelf, struct symbol *sym)
@@ -73,7 +75,7 @@ index a2a9cab..211ea72 100644
  /*
   * gcc renames static local variables by appending a period and a number.  For
   * example, __foo could be renamed to __foo.31452.  Unfortunately this number
-@@ -1230,6 +1264,11 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
+@@ -1425,6 +1459,11 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
  			if (sym->twin)
  				continue;
  
@@ -85,7 +87,7 @@ index a2a9cab..211ea72 100644
  			bundled = sym == sym->sec->sym;
  			if (bundled && sym->sec == sec->base) {
  				/*
-@@ -1286,6 +1325,11 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
+@@ -1482,6 +1521,11 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
  			if (!kpatch_is_normal_static_local(sym))
  				continue;
  
@@ -94,10 +96,10 @@ index a2a9cab..211ea72 100644
 +				continue;
 +			}
 +
- 			if (!sym->twin || !sec->twin)
- 				DIFF_FATAL("reference to static local variable %s in %s was removed",
- 					   sym->name,
-@@ -1329,7 +1373,6 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
+ 			if (!sec->twin && sec->base->sym) {
+ 				struct symbol *parent = NULL;
+ 
+@@ -1525,7 +1569,6 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
  			log_normal("WARNING: unable to correlate static local variable %s used by %s, assuming variable is new\n",
  				   sym->name,
  				   kpatch_section_function_name(sec));
@@ -106,5 +108,5 @@ index a2a9cab..211ea72 100644
  	}
  }
 -- 
-2.18.1
+2.23.0
 

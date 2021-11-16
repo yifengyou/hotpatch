@@ -1,0 +1,29 @@
+From ea05261d87f22ecebcc5e4abac662960e732e33b Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Tue, 16 Nov 2021 20:21:31 +0800
+Subject: [PATCH 24/24] kpatch-build: support CROSS_COMPILE
+
+some Makefile use $(CROSS_COMPILE)gcc to compile .o
+file, append CROSS_COMPILE to MAKEVARS to make it
+run into kpatch-cc.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/kpatch-build | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index 2ead6e4..6a9e818 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -1016,6 +1016,7 @@ if [ "$CONFIG_CC_IS_CLANG" -eq 1 ]; then
+ 	MAKEVARS+=("HOSTCC=clang")
+ else
+ 	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}gcc")
++	MAKEVARS+=("CROSS_COMPILE=${KPATCH_CC_PREFIX}")
+ fi
+ 
+ if [ "$CONFIG_LD_IS_LLD" -eq 1 ]; then
+-- 
+2.23.0
+

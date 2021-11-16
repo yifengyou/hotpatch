@@ -1,7 +1,7 @@
-From 48fef6d7eceb336816e45690d43093f8be919315 Mon Sep 17 00:00:00 2001
+From d28c18b094c18118427eadb4c63ab73cf64af4e6 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Wed, 26 Feb 2020 21:01:02 -0500
-Subject: [PATCH 15/23] kpatch-build: ignore debuginfo in patch
+Subject: [PATCH 14/24] kpatch-build: ignore debuginfo in patch
 
 Just ignore all .debug_* sections
 
@@ -12,10 +12,10 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
  2 files changed, 19 insertions(+)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index c5320d4..bc3685b 100644
+index ea1e01b..8c5af6b 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -2414,6 +2414,23 @@ static void kpatch_include_debug_sections(struct kpatch_elf *kelf)
+@@ -2714,6 +2714,23 @@ static void kpatch_include_debug_sections(struct kpatch_elf *kelf)
  	}
  }
  
@@ -39,26 +39,26 @@ index c5320d4..bc3685b 100644
  static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
  {
  	struct section *sec, *strsec, *ignoresec;
-@@ -3682,6 +3699,7 @@ int main(int argc, char *argv[])
+@@ -3908,6 +3925,7 @@ int main(int argc, char *argv[])
  	new_globals_exist = kpatch_include_new_globals(kelf_patched);
  	kpatch_include_new_static_var(kelf_patched);
  	kpatch_include_debug_sections(kelf_patched);
 +	kpatch_ignore_debug_sections(kelf_patched);
  
- 	kpatch_process_special_sections(kelf_patched);
+ 	kpatch_process_special_sections(kelf_patched, lookup);
  
 diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
-index 57487b1..c109ee3 100755
+index 9a98bfc..a0d8ba8 100755
 --- a/kpatch-build/kpatch-build
 +++ b/kpatch-build/kpatch-build
-@@ -1143,6 +1143,7 @@ KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
- KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
- CROSS_COMPILE="$ARCH_COMPILE" \
- 	make 2>&1 | logger || die
-+${ARCH_COMPILE}strip -g "$TEMPDIR/patch/$MODNAME.ko"
+@@ -1295,6 +1295,7 @@ KPATCH_LDFLAGS="$KPATCH_LDFLAGS"
+ save_env
  
- if ! "$KPATCH_MODULE"; then
- 	if [[ -z "$KPATCH_LDFLAGS" ]]; then
+ make "${MAKEVARS[@]}" 2>&1 | logger || die
++strip -g "$TEMPDIR/patch/$MODNAME.ko"
+ 
+ if [[ "$USE_KLP" -eq 1 ]]; then
+ 	if [[ "$USE_KLP_ARCH" -eq 0 ]]; then
 -- 
-2.18.1
+2.23.0
 

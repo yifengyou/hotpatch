@@ -1,7 +1,7 @@
-From 24392c6f62e26afb192992808772bd19ceab5446 Mon Sep 17 00:00:00 2001
+From 8341b9ea6b889a887577772f6adfb49e1fea1bc1 Mon Sep 17 00:00:00 2001
 From: Bin Yang <robin.yb@huawei.com>
 Date: Tue, 16 Jul 2019 14:39:27 +0800
-Subject: [PATCH 16/23] add object in kpatch
+Subject: [PATCH 15/24] add object in kpatch
 
 it is required by make_hotpatch users
 
@@ -11,10 +11,10 @@ Signed-off-by: Bin Yang <robin.yb@huawei.com>
  1 file changed, 3 insertions(+)
 
 diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
-index c109ee3..de448dc 100755
+index a0d8ba8..c21f3ca 100755
 --- a/kpatch-build/kpatch-build
 +++ b/kpatch-build/kpatch-build
-@@ -1071,6 +1071,8 @@ echo -n "Patched objects:"
+@@ -1227,6 +1227,8 @@ echo -n "Patched objects:"
  for i in $(echo "${objnames[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')
  do
  	echo -n " $i"
@@ -23,14 +23,14 @@ index c109ee3..de448dc 100755
  done
  echo
  
-@@ -1177,6 +1179,7 @@ UNDEFINED=$(comm -23 <(sort -u "${TEMPDIR}"/undefined_references) \
+@@ -1353,6 +1355,7 @@ UNDEFINED=$(comm -23 <(sort -u "${TEMPDIR}"/undefined_references) \
  [[ -z "$USERMODBUILDDIR" ]] && [[ -n "$UNDEFINED" ]] && die "Undefined symbols: $UNDEFINED"
  
  cp -f "$TEMPDIR/patch/$MODNAME.ko" "$BASE" || die
 +cp -f "$TEMPDIR/patch/object" "$BASE" || die
  
- [[ "$DEBUG" -eq 0 ]] && rm -f "$LOGFILE"
+ [[ "$DEBUG" -eq 0 && "$SKIPCLEANUP" -eq 0 ]] && rm -f "$LOGFILE"
  
 -- 
-2.18.1
+2.23.0
 

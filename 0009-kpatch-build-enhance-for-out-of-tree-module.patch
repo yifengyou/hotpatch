@@ -1,0 +1,198 @@
+From 12530d7f476e8629fc7e50443f34164a43ef18b6 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Wed, 26 Feb 2020 06:44:06 -0500
+Subject: [PATCH 09/24] kpatch-build: enhance for out of tree module
+
+support set USERMODBUILDDIR to build patch for out
+of tree module.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/kpatch-build | 62 +++++++++++++++++++++++++++++++--------
+ kpatch-build/kpatch-cc    |  4 ++-
+ 2 files changed, 53 insertions(+), 13 deletions(-)
+
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index c85e05a..3aca1f3 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -492,7 +492,11 @@ filter_parent_obj()
+   local dir="${1}"
+   local file="${2}"
+ 
+-  grep -v "\.mod\.cmd$" | grep -Fv "${dir}/.${file}.cmd"
++  grep -v "\.mod\.cmd$" | grep -Fv "${dir}/.${file}.cmd" |  while read input; do
++    if [ "$(readlink -f $input)" != "$(readlink -f ${dir}/.${file}.cmd)" ];then
++        echo $input;
++    fi
++  done
+ }
+ 
+ find_parent_obj() {
+@@ -514,6 +518,11 @@ find_parent_obj() {
+ 			num="$(find . -name ".*.cmd" -print0 | xargs -0 grep -lw "$grepname" | filter_parent_obj "${pdir}" "${file}" | wc -l)"
+ 			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
+ 		fi
++		if [[ "$num" -eq 0 ]]; then
++			parent="$(find $USERMODBUILDDIR -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fv "$pdir/.${file}.cmd" | head -n1)"
++			num="$(find $USERMODBUILDDIR -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fvc "$pdir/.${file}.cmd")"
++			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
++		fi
+ 	else
+ 		parent="$(grep -lw "$grepname" "$dir"/.*.cmd | filter_parent_obj "${dir}" "${file}" | head -n1)"
+ 		num="$(grep -lw "$grepname" "$dir"/.*.cmd | filter_parent_obj "${dir}" "${file}" | wc -l)"
+@@ -703,6 +712,10 @@ if [[ -n "$SRCRPM" ]]; then
+ 	ARCHVERSION="${ARCHVERSION#alt-}"
+ fi
+ 
++if [[ -n "$USERMODBUILDDIR" ]]; then
++	OOT_MODULE="yes"
++fi
++
+ if [[ -n "$OOT_MODULE" ]] &&  [[ -z "$USERSRCDIR" ]]; then
+ 	warn "--oot-module requires --sourcedir"
+ 	exit 1
+@@ -720,7 +733,7 @@ if [[ -n "$USERSRCDIR" ]]; then
+ 	fi
+ 	SRCDIR="$USERSRCDIR"
+ 
+-	if [[ -z "$OOT_MODULE" ]]; then
++	if [[ -z "$OOT_MODULE" || "$OOT_MODULE" == "yes" ]]; then
+ 		[[ -z "$VMLINUX" ]] && VMLINUX="$SRCDIR"/vmlinux
+ 		[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
+ 
+@@ -742,7 +755,7 @@ if [[ "$ARCHVERSION" =~ - ]]; then
+ fi
+ [[ "$ARCHVERSION" =~ .el7a. ]] && ALT="-alt"
+ 
+-[[ -z "$TARGETS" ]] && TARGETS="vmlinux modules"
++[[ -z "$OOT_MODULE" ]] && [[ -z "$TARGETS" ]] && TARGETS="vmlinux modules"
+ 
+ # Don't check external file.
+ # shellcheck disable=SC1090
+@@ -870,7 +883,9 @@ fi
+ [[ -z "$CONFIGFILE" ]] && CONFIGFILE="$SRCDIR"/.config
+ [[ ! -e "$CONFIGFILE" ]] && die "can't find config file"
+ if [[ ! "$CONFIGFILE" -ef "$SRCDIR"/.config ]] ; then
+-	cp -f "$CONFIGFILE" "$SRCDIR/.config" || die
++	if [[ -z "$OOT_MODULE" ]] ; then
++		cp -f "$CONFIGFILE" "$SRCDIR/.config" || die
++	fi
+ fi
+ 
+ # kernel option checking
+@@ -947,7 +962,7 @@ if [[ "$CONFIG_CC_IS_CLANG" -eq 1 ]]; then
+ fi
+ 
+ if [[ "$SKIPCOMPILERCHECK" -eq 0 ]]; then
+-	if [[ -n "$OOT_MODULE" ]]; then
++	if [[ -n "$OOT_MODULE" ]] && [[ "$OOT_MODULE" != "yes" ]]; then
+ 		target="$OOT_MODULE"
+ 	else
+ 		target="$VMLINUX"
+@@ -1005,10 +1020,16 @@ fi
+ 
+ # $TARGETS used as list, no quotes.
+ # shellcheck disable=SC2086
+-make "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
++if [[ -z "$USERMODBUILDDIR" ]]; then
++	make "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
++else
++	make "${MAKEVARS[@]}" -C "$USERMODBUILDDIR" M="$USERMODBUILDDIR" $USERMODFLAGS "-j$CPUS" $TARGETS 2>&1 | logger || die
++fi
+ 
+ # Save original module symvers
+-cp -f "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
++if [[ "$OOT_MODULE" != "yes" ]]; then
++	cp -f "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
++fi
+ 
+ echo "Building patched source"
+ apply_patches
+@@ -1018,7 +1039,12 @@ export KPATCH_GCC_SRCDIR="$SRCDIR"
+ save_env
+ # $TARGETS used as list, no quotes.
+ # shellcheck disable=SC2086
+-KBUILD_MODPOST_WARN=1 make "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
++
++if [[ -z "$USERMODBUILDDIR" ]]; then
++	KBUILD_MODPOST_WARN=1 make "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
++else
++	KBUILD_MODPOST_WARN=1 make "${MAKEVARS[@]}" -C "$USERMODBUILDDIR" M="$USERMODBUILDDIR" $USERMODFLAGS "-j$CPUS" $TARGETS 2>&1 | logger || die
++fi
+ 
+ # source.c:(.section+0xFF): undefined reference to `symbol'
+ grep "undefined reference" "$LOGFILE" | sed -r "s/^.*\`(.*)'$/\\1/" \
+@@ -1033,7 +1059,7 @@ fi
+ 
+ [[ -n "$OOT_MODULE" ]] || grep -q vmlinux "$SRCDIR/Module.symvers" || die "truncated $SRCDIR/Module.symvers file"
+ 
+-if [[ "$CONFIG_MODVERSIONS" -eq 1 ]]; then
++if [[ "$CONFIG_MODVERSIONS" -eq 1 ]] && [[ "$OOT_MODULE" != "yes" ]]; then
+     while read -ra sym_line; do
+         if [[ ${#sym_line[@]} -lt 4 ]]; then
+             die "Malformed ${TEMPDIR}/Module.symvers file"
+@@ -1061,7 +1087,11 @@ fi
+ for i in $(cat "$TEMPDIR/changed_objs")
+ do
+ 	mkdir -p "$TEMPDIR/patched/$(dirname "$i")" || die
+-	cp -f "$SRCDIR/$i" "$TEMPDIR/patched/$i" || die
++	if [ -z "$USERMODBUILDDIR" ];then
++		cp -f "$SRCDIR/$i" "$TEMPDIR/patched/$i" || die
++	else
++		cp -f "$i" "$TEMPDIR/patched/$i" || die
++	fi
+ done
+ 
+ echo "Extracting new and modified ELF sections"
+@@ -1095,7 +1125,7 @@ CHANGED=0
+ ERROR=0
+ 
+ # Prepare OOT module symvers file
+-if [[ -n "$OOT_MODULE" ]]; then
++if [[ -n "$OOT_MODULE" ]] && [[ "$OOT_MODULE" != "yes" ]]; then
+     BUILDDIR="/lib/modules/$ARCHVERSION/build/"
+     cp -f "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
+     awk '{ print $1 "\t" $2 "\t" $3 "\t" $4}' "${BUILDDIR}/Module.symvers" >> "$TEMPDIR/Module.symvers"
+@@ -1131,6 +1161,14 @@ for i in $FILES; do
+ 			KOBJFILE_PATH="${TEMPDIR}/module/$KOBJFILE"
+ 			SYMTAB="${KOBJFILE_PATH}.symtab"
+ 			SYMVERS_FILE="$SRCDIR/Module.symvers"
++
++			if [ "$OOT_MODULE" == "yes" ];then
++				BUILDDIR="/lib/modules/$ARCHVERSION/build/"
++				SYMVERS_FILE="$TEMPDIR/Module.symvers"
++				[[ -e $SRCDIR/Module.symvers ]] && cp "$SRCDIR/Module.symvers" "$SYMVERS_FILE"
++				[[ -e $USERMODBUILDDIR/Module.symvers ]] && cp "$USERMODBUILDDIR/Module.symvers" $SYMVERS_FILE
++				awk '{ print $1 "\t" $2 "\t" $3 "\t" $4}' "${BUILDDIR}/Module.symvers" >> "$SYMVERS_FILE"
++			fi
+ 		fi
+ 
+ 		readelf -s --wide "$KOBJFILE_PATH" > "$SYMTAB"
+@@ -1283,7 +1321,7 @@ fi
+ # column containing lines unique to first file.
+ UNDEFINED=$(comm -23 <(sort -u "${TEMPDIR}"/undefined_references) \
+ 	<(sort -u "${TEMPDIR}"/new_symbols) | tr '\n' ' ')
+-[[ -n "$UNDEFINED" ]] && die "Undefined symbols: $UNDEFINED"
++[[ -z "$USERMODBUILDDIR" ]] && [[ -n "$UNDEFINED" ]] && die "Undefined symbols: $UNDEFINED"
+ 
+ cp -f "$TEMPDIR/patch/$MODNAME.ko" "$BASE" || die
+ 
+diff --git a/kpatch-build/kpatch-cc b/kpatch-build/kpatch-cc
+index 476436f..7ee1655 100755
+--- a/kpatch-build/kpatch-cc
++++ b/kpatch-build/kpatch-cc
+@@ -24,7 +24,9 @@ if [[ "$TOOLCHAINCMD" =~ ^(.*-)?gcc$ || "$TOOLCHAINCMD" =~ ^(.*-)?clang$ ]] ; th
+ 
+ 			[[ "$obj" = */.tmp_*.o ]] && obj="${obj/.tmp_/}"
+ 			relobj=${obj//$KPATCH_GCC_SRCDIR\//}
+-			case "$relobj" in
++			tmpobj=$(readlink -f $obj)
++			relobj2=${tmpobj//$KPATCH_GCC_SRCDIR\//}
++			case "$relobj2" in
+ 				*.mod.o|\
+ 				*built-in.o|\
+ 				*built-in.a|\
+-- 
+2.23.0
+

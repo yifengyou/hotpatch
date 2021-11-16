@@ -1,0 +1,165 @@
+From 86bae0f77f1e11f6b64eb950c739f7c6b444eb43 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Wed, 26 Feb 2020 07:36:59 -0500
+Subject: [PATCH 10/24] support c++ kernel module
+
+support GNU_UNIQUE type symbols.
+support .group section corelation.
+ignore compile warning for third party modules.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 48 ++++++++++++++++++++-----------
+ kpatch-build/kpatch-cc            |  4 ++-
+ kpatch-build/kpatch-elf.c         |  8 +++++-
+ kpatch-build/lookup.c             |  5 +++-
+ 4 files changed, 45 insertions(+), 20 deletions(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 18aff6d..5903803 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -539,7 +539,7 @@ static void kpatch_compare_correlated_nonrela_section(struct section *sec)
+ {
+ 	struct section *sec1 = sec, *sec2 = sec->twin;
+ 
+-	if (sec1->sh.sh_type != SHT_NOBITS &&
++	if (sec1->sh.sh_type != SHT_NOBITS && sec1->sh.sh_type != SHT_GROUP &&
+ 	    memcmp(sec1->data->d_buf, sec2->data->d_buf, sec1->data->d_size))
+ 		sec->status = CHANGED;
+ 	else
+@@ -555,7 +555,7 @@ static void kpatch_compare_correlated_section(struct section *sec)
+ 	    sec1->sh.sh_flags != sec2->sh.sh_flags ||
+ 	    sec1->sh.sh_entsize != sec2->sh.sh_entsize ||
+ 	    (sec1->sh.sh_addralign != sec2->sh.sh_addralign &&
+-	     !is_text_section(sec1)))
++	     !is_text_section(sec1) && strcmp(sec1->name, ".rodata")))
+ 		DIFF_FATAL("%s section header details differ from %s", sec1->name, sec2->name);
+ 
+ 	/* Short circuit for mcount sections, we rebuild regardless */
+@@ -1024,6 +1024,34 @@ static void kpatch_correlate_section(struct section *sec_orig,
+ 		kpatch_correlate_symbol(sec_orig->sym, sec_patched->sym);
+ }
+ 
++static int kpatch_correlate_group_section(struct list_head *seclist_orig,
++		struct list_head *seclist_patched, struct section *sec1, struct section *sec2)
++{
++	unsigned int *data1, *end1, *data2;
++	struct section *isec1, *isec2;
++
++	if (sec1->data->d_size != sec2->data->d_size)
++		return 1;
++	data1 = sec1->data->d_buf;
++	data2 = sec2->data->d_buf;
++	end1 = sec1->data->d_buf + sec1->data->d_size;
++	data1++;
++	data2++;
++	while (data1 < end1) {
++		isec1 = find_section_by_index(seclist_orig, *data1);
++		if (!isec1)
++			ERROR("group section not found");
++		isec2 = find_section_by_index(seclist_patched, *data2);
++		if (!isec2)
++			ERROR("group section not found");
++		if (strcmp(isec1->name, isec2->name))
++			return 1;
++		data1++;
++		data2++;
++	}
++	return 0;
++}
++
+ static void kpatch_correlate_sections(struct list_head *seclist_orig,
+ 		struct list_head *seclist_patched)
+ {
+@@ -1047,10 +1075,7 @@ static void kpatch_correlate_sections(struct list_head *seclist_orig,
+ 			 * Changed group sections are currently not supported.
+ 			 */
+ 			if (sec_orig->sh.sh_type == SHT_GROUP) {
+-				if (sec_orig->data->d_size != sec_patched->data->d_size)
+-					continue;
+-				if (memcmp(sec_orig->data->d_buf, sec_patched->data->d_buf,
+-				           sec_orig->data->d_size))
++				if (kpatch_correlate_group_section(seclist_orig, seclist_patched, sec_orig, sec_patched))
+ 					continue;
+ 			}
+ 
+@@ -1725,17 +1750,6 @@ static void kpatch_verify_patchability(struct kpatch_elf *kelf)
+ 			errs++;
+ 		}
+ 
+-		if (sec->status != SAME && sec->grouped) {
+-			log_normal("changed section %s is part of a section group\n",
+-				   sec->name);
+-			errs++;
+-		}
+-
+-		if (sec->sh.sh_type == SHT_GROUP && sec->status == NEW) {
+-			log_normal("new/changed group sections are not supported\n");
+-			errs++;
+-		}
+-
+ 		/*
+ 		 * ensure we aren't including .data.* or .bss.*
+ 		 * (.data.unlikely and .data.once is ok b/c it only has __warned vars)
+diff --git a/kpatch-build/kpatch-cc b/kpatch-build/kpatch-cc
+index 7ee1655..80d310c 100755
+--- a/kpatch-build/kpatch-cc
++++ b/kpatch-build/kpatch-cc
+@@ -13,7 +13,9 @@ fi
+ 
+ declare -a args=("$@")
+ 
+-if [[ "$TOOLCHAINCMD" =~ ^(.*-)?gcc$ || "$TOOLCHAINCMD" =~ ^(.*-)?clang$ ]] ; then
++if [[ "$TOOLCHAINCMD" =~ ^(.*-)?gcc$ ||
++	"$TOOLCHAINCMD" =~ ^(.*-)?g\+\+$ ||
++	"$TOOLCHAINCMD" =~ ^(.*-)?clang$ ]] ; then
+ 	while [ "$#" -gt 0 ]; do
+ 		if [ "$1" = "-o" ]; then
+ 			obj="$2"
+diff --git a/kpatch-build/kpatch-elf.c b/kpatch-build/kpatch-elf.c
+index 68d5c86..2df9105 100644
+--- a/kpatch-build/kpatch-elf.c
++++ b/kpatch-build/kpatch-elf.c
+@@ -712,8 +712,14 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
+ 	unsigned int index;
+ 
+ 	index = 1; /* elf write function handles NULL section 0 */
+-	list_for_each_entry(sec, &kelf->sections, list)
++	list_for_each_entry(sec, &kelf->sections, list) {
+ 		sec->index = index++;
++		/*
++		 * since we exclude .group section, we clear SHF_GROUP
++		 * for every section in case of link error.
++		 */
++		sec->sh.sh_flags &= (~SHF_GROUP);
++	}
+ 
+ 	index = 0;
+ 	list_for_each_entry(sym, &kelf->symbols, list) {
+diff --git a/kpatch-build/lookup.c b/kpatch-build/lookup.c
+index 0323c61..e81e934 100644
+--- a/kpatch-build/lookup.c
++++ b/kpatch-build/lookup.c
+@@ -304,6 +304,8 @@ static void symtab_read(struct lookup_table *table, char *path)
+ 			table->obj_syms[i].bind = STB_GLOBAL;
+ 		} else if (!strcmp(bind, "WEAK")) {
+ 			table->obj_syms[i].bind = STB_WEAK;
++		} else if (!strcmp(bind, "UNIQUE")) {
++			table->obj_syms[i].bind = STB_GNU_UNIQUE;
+ 		} else {
+ 			ERROR("unknown symbol bind %s", bind);
+ 		}
+@@ -528,7 +530,8 @@ static bool lookup_global_symbol(struct lookup_table *table, char *name,
+ 
+ 	memset(result, 0, sizeof(*result));
+ 	for_each_obj_symbol(i, sym, table) {
+-		if ((sym->bind == STB_GLOBAL || sym->bind == STB_WEAK) &&
+++		if ((sym->bind == STB_GLOBAL || sym->bind == STB_WEAK
+++			|| sym->bind == STB_GNU_UNIQUE) &&
+ 		    !strcmp(sym->name, name)) {
+ 
+ 			if (result->objname)
+-- 
+2.23.0
+

@@ -1,7 +1,8 @@
-From 737ab3efcde45cde5fbe43ee977fc18b6912f356 Mon Sep 17 00:00:00 2001
+From 47a9749d381f02868b4f4bbe1bc841f3f38ac1a1 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Sun, 22 Nov 2020 21:40:39 +0800
-Subject: [PATCH] Fix relocation not resolved when new functions exported only
+Subject: [PATCH 19/24] Fix relocation not resolved when new functions exported
+ only
 
 When no functions changed and new functions exported, kobject is not
 created, so livepatch will not call klp_init_object and relocation
@@ -12,8 +13,8 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
  kmod/patch/kpatch-patch.h         |  4 ++++
  kmod/patch/kpatch.lds.S           |  6 ++++++
  kmod/patch/livepatch-patch-hook.c | 19 +++++++++++++++++++
- kpatch-build/create-diff-object.c | 24 ++++++++++++++++++++++++
- 4 files changed, 53 insertions(+)
+ kpatch-build/create-diff-object.c | 26 ++++++++++++++++++++++++++
+ 4 files changed, 55 insertions(+)
 
 diff --git a/kmod/patch/kpatch-patch.h b/kmod/patch/kpatch-patch.h
 index 6e39364..33f2056 100644
@@ -46,10 +47,10 @@ index bc5de82..4c4d77b 100644
 +  }
  }
 diff --git a/kmod/patch/livepatch-patch-hook.c b/kmod/patch/livepatch-patch-hook.c
-index 5a0de7f..d3fb1db 100644
+index 71439d9..9e56fe3 100644
 --- a/kmod/patch/livepatch-patch-hook.c
 +++ b/kmod/patch/livepatch-patch-hook.c
-@@ -249,6 +249,22 @@ static int patch_is_func_forced(unsigned long addr)
+@@ -442,6 +442,22 @@ static int patch_is_func_forced(unsigned long addr)
  	return 0;
  }
  
@@ -69,10 +70,10 @@ index 5a0de7f..d3fb1db 100644
 +	return 0;
 +}
 +
- 
- #ifdef HAVE_CALLBACKS
- static int add_callbacks_to_patch_objects(void)
-@@ -382,6 +398,9 @@ static int __init patch_init(void)
+ static int __init patch_init(void)
+ {
+ 	struct kpatch_patch_func *kfunc;
+@@ -485,6 +501,9 @@ static int __init patch_init(void)
  	if (ret)
  		goto out;
  
@@ -83,10 +84,10 @@ index 5a0de7f..d3fb1db 100644
  	ret = -ENOMEM;
  
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index fca68b8..bea758e 100644
+index 6b915ae..0bef022 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -2553,6 +2553,27 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
+@@ -2916,6 +2916,27 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
  	karch_sec->sh.sh_size = karch_sec->data->d_size;
  }
  
@@ -106,24 +107,26 @@ index fca68b8..bea758e 100644
 +	/* entries[index].objname */
 +	ALLOC_LINK(rela, &kobj_sec->rela->relas);
 +	rela->sym = strsym;
-+	rela->type = absolute_rela_type;
++	rela->type = ABSOLUTE_RELA_TYPE;
 +	rela->addend = offset_of_string(&kelf->strings, objname);
 +	rela->offset = (unsigned int)(offsetof(struct kpatch_object, objname));
 +}
 +
- static void kpatch_process_special_sections(struct kpatch_elf *kelf)
+ static void kpatch_process_special_sections(struct kpatch_elf *kelf,
+ 					    struct lookup_table *lookup)
  {
- 	struct special_section *special;
-@@ -3710,6 +3731,9 @@ int main(int argc, char *argv[])
+@@ -3973,6 +3994,11 @@ int main(int argc, char *argv[])
  	kpatch_create_intermediate_sections(kelf_out, lookup, parent_name, patch_name);
  	kpatch_create_kpatch_arch_section(kelf_out, parent_name);
  	kpatch_create_callbacks_objname_rela(kelf_out, parent_name);
++
 +	if (!num_changed && new_globals_exist) {
-+		kpatch_create_kpatch_object_section(kelf_out, parent_name);                                                                        
++		kpatch_create_kpatch_object_section(kelf_out, parent_name);
 +	}
++
  	kpatch_build_strings_section_data(kelf_out);
  
- 	gcc_add_option = getenv("GCC_ADD_OPTION");
+ 	kpatch_create_mcount_sections(kelf_out);
 -- 
-2.18.1
+2.23.0
 

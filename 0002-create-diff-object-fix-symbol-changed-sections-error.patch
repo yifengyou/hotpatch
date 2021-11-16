@@ -1,0 +1,31 @@
+From 72d28d667f8f6baa88882abfc1590cce3e9e2b1f Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Sun, 14 Nov 2021 15:57:55 +0800
+Subject: [PATCH 02/24] create-diff-object: fix symbol changed sections error
+ on aarch64
+
+$d is reserved symbols in aarch64, we met following error when
+building patch on aarch64. just ignore it.
+ERROR: cmdline.o: symbol changed sections: $d
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index ca55180..6c28280 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -865,6 +865,8 @@ static void kpatch_compare_correlated_symbol(struct symbol *sym)
+ 		if ((sym2->sec->twin && sym2->sec->twin->ignore) ||
+ 		    kpatch_subsection_changed(sym1->sec, sym2->sec))
+ 			sym->status = CHANGED;
++		else if (sym1->name[0] == '$') /* reserved symbols in aarch64 */
++			log_debug("maping symbols: %s", sym1->name); /* do nothing just ignogre */
+ 		else
+ 			DIFF_FATAL("symbol changed sections: %s", sym1->name);
+ 	}
+-- 
+2.23.0
+

@@ -1,0 +1,154 @@
+From 88d2a5c88fcab0016db9347fbab41a22b9fb9a52 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Wed, 26 Feb 2020 20:43:34 -0500
+Subject: [PATCH 13/24] livepatch-patch-hook: support force enable/disable
+
+we use force to indicate function which bypass stack check
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kmod/patch/kpatch-patch.h         |  1 +
+ kmod/patch/livepatch-patch-hook.c | 17 +++++++++++++++++
+ kpatch-build/kpatch-build         | 24 ++++++++++++++++++++----
+ 3 files changed, 38 insertions(+), 4 deletions(-)
+
+diff --git a/kmod/patch/kpatch-patch.h b/kmod/patch/kpatch-patch.h
+index 9df7818..6e39364 100644
+--- a/kmod/patch/kpatch-patch.h
++++ b/kmod/patch/kpatch-patch.h
+@@ -64,4 +64,5 @@ struct kpatch_post_unpatch_callback {
+ 	char *objname;
+ };
+ 
++extern unsigned long __kpatch_force_funcs[], __kpatch_force_funcs_end[];
+ #endif /* _KPATCH_PATCH_H_ */
+diff --git a/kmod/patch/livepatch-patch-hook.c b/kmod/patch/livepatch-patch-hook.c
+index b578ef3..71439d9 100644
+--- a/kmod/patch/livepatch-patch-hook.c
++++ b/kmod/patch/livepatch-patch-hook.c
+@@ -432,6 +432,16 @@ extern struct kpatch_patch_func __kpatch_funcs[], __kpatch_funcs_end[];
+ extern struct kpatch_patch_dynrela __kpatch_dynrelas[], __kpatch_dynrelas_end[];
+ #endif
+ 
++static int patch_is_func_forced(unsigned long addr)
++{
++	unsigned long *a;
++
++	for (a = __kpatch_force_funcs; a < __kpatch_force_funcs_end; a++)
++		if (*a == addr)
++			return 1;
++	return 0;
++}
++
+ static int __init patch_init(void)
+ {
+ 	struct kpatch_patch_func *kfunc;
+@@ -520,6 +530,13 @@ static int __init patch_init(void)
+ 			lfunc = &lfuncs[j];
+ 			lfunc->old_name = func->kfunc->name;
+ 			lfunc->new_func = (void *)func->kfunc->new_addr;
++#if defined(__KLP_SUPPORT_FORCE__)
++#ifdef __ALL_FORCE__
++			lfunc->force = 1;
++#else
++			lfunc->force = patch_is_func_forced(func->kfunc->new_addr);
++#endif
++#endif
+ #ifdef HAVE_SYMPOS
+ 			lfunc->old_sympos = func->kfunc->sympos;
+ #else
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index 722d362..9a98bfc 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -383,28 +383,32 @@ find_special_section_data_aarch64() {
+ 	# shellcheck disable=SC2086
+ 	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
+ 		gawk --non-decimal-data $AWK_OPTIONS '
+-		BEGIN { a = b = e = j =  0 }
++		BEGIN { a = b = e = j = c = f = 0 }
+ 
+ 		# Set state if name matches
+ 		a == 0 && /DW_AT_name.* alt_instr[[:space:]]*$/ {a = 1; next}
+ 		b == 0 && /DW_AT_name.* bug_entry[[:space:]]*$/ {b = 1; next}
+ 		e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
+ 		j == 0 && /DW_AT_name.* jump_entry[[:space:]]*$/ {j = 1; next}
++		c == 0 && /DW_AT_name.* klp_func[[:space:]]*$/ {c = 1; next}
+ 
+ 		# Reset state unless this abbrev describes the struct size
+ 		a == 1 && !/DW_AT_byte_size/ { a = 0; next }
+ 		b == 1 && !/DW_AT_byte_size/ { b = 0; next }
+ 		e == 1 && !/DW_AT_byte_size/ { e = 0; next }
+ 		j == 1 && !/DW_AT_byte_size/ { j = 0; next }
++		c == 1 && /DW_TAG_structure_type/ { c = 3; next }
++		c == 1 && /DW_AT_name.* force[[:space:]]*$/ {f = 2; next}
+ 
+ 		# Now that we know the size, stop parsing for it
+ 		a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
+ 		b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
+ 		e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
+ 		j == 1 {printf("export JUMP_STRUCT_SIZE=%d\n", $4); j = 2}
++		f == 2 {printf("export KLP_SUPPORT_FORCE=y\n"); f = 3}
+ 
+ 		# Bail out once we have everything
+-		a == 2 && b == 2 && e == 2 && (j == 2 || skip_j) {exit}')"
++		a == 2 && b == 2 && e == 2 && (j == 2 || skip_j) && c == 3 {exit}')"
+ 
+ 	[[ -n "$SPECIAL_VARS" ]] && eval "$SPECIAL_VARS"
+ 
+@@ -437,7 +441,7 @@ find_special_section_data() {
+ 	# shellcheck disable=SC2086
+ 	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
+ 		gawk --non-decimal-data $AWK_OPTIONS '
+-		BEGIN { a = b = p = e = o = j = s = i = 0 }
++		BEGIN { a = b = p = e = o = j = s = i = c = f = 0 }
+ 
+ 		# Set state if name matches
+ 		a == 0 && /DW_AT_name.* alt_instr[[:space:]]*$/ {a = 1; next}
+@@ -448,6 +452,7 @@ find_special_section_data() {
+ 		j == 0 && /DW_AT_name.* jump_entry[[:space:]]*$/ {j = 1; next}
+ 		s == 0 && /DW_AT_name.* static_call_site[[:space:]]*$/ {s = 1; next}
+ 		i == 0 && /DW_AT_name.* pi_entry[[:space:]]*$/ {i = 1; next}
++		c == 0 && /DW_AT_name.* klp_func[[:space:]]*$/ {c = 1; next}
+ 
+ 		# Reset state unless this abbrev describes the struct size
+ 		a == 1 && !/DW_AT_byte_size/ { a = 0; next }
+@@ -458,6 +463,8 @@ find_special_section_data() {
+ 		j == 1 && !/DW_AT_byte_size/ { j = 0; next }
+ 		s == 1 && !/DW_AT_byte_size/ { s = 0; next }
+ 		i == 1 && !/DW_AT_byte_size/ { i = 0; next }
++		c == 1 && /DW_TAG_structure_type/ { c = 3; next }
++		c == 1 && /DW_AT_name.* force[[:space:]]*$/ {f = 2; next}
+ 
+ 		# Now that we know the size, stop parsing for it
+ 		a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
+@@ -468,9 +475,10 @@ find_special_section_data() {
+ 		j == 1 {printf("export JUMP_STRUCT_SIZE=%d\n", $4); j = 2}
+ 		s == 1 {printf("export STATIC_CALL_STRUCT_SIZE=%d\n", $4); s = 2}
+ 		i == 1 {printf("export PRINTK_INDEX_STRUCT_SIZE=%d\n", $4); i = 2}
++		f == 2 {printf("export KLP_SUPPORT_FORCE=y\n"); f = 3}
+ 
+ 		# Bail out once we have everything
+-		a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 && (o == 2 || skip_o) && (j == 2 || skip_j) && (s == 2 || skip_s) && (i == 2 || skip_i) {exit}')"
++		a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 && (o == 2 || skip_o) && (j == 2 || skip_j) && (s == 2 || skip_s) && (i == 2 || skip_i) && c == 3 {exit}')"
+ 
+ 	[[ -n "$SPECIAL_VARS" ]] && eval "$SPECIAL_VARS"
+ 
+@@ -1231,6 +1239,14 @@ if [[ -n "$DISABLE_AFTER_LOAD" ]];then
+ 	export KCPPFLAGS="-DDISABLE_AFTER_LOAD $KCPPFLAGS"
+ fi
+ 
++if [[ -n "$NO_STACK_CHECK" ]];then
++	export KCPPFLAGS="-D__ALL_FORCE__ $KCPPFLAGS"
++fi
++
++if [[ -n "$KLP_SUPPORT_FORCE" ]];then
++	export KCPPFLAGS="-D__KLP_SUPPORT_FORCE__ $KCPPFLAGS"
++fi
++
+ save_env
+ 
+ echo "Building patch module: $MODNAME.ko"
+-- 
+2.23.0
+
