@@ -1,7 +1,7 @@
-From 9f30a27617915ee8c59aa43d9165d938129796b3 Mon Sep 17 00:00:00 2001
+From 42cfc6a9add67e23433bf431da74d6babe38be61 Mon Sep 17 00:00:00 2001
 From: Zhiyu Hu <huzhiyu1@huawei.com>
 Date: Fri, 28 Dec 2018 07:06:38 +0000
-Subject: [PATCH 08/23] fix rodata.str problem
+Subject: [PATCH 07/24] fix rodata.str problem
 
 fix some rodata.str problem
 
@@ -11,10 +11,10 @@ Signed-off-by: Zhiyu Hu <huzhiyu1@huawei.com>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
-index 8ce3b59..f37d404 100644
+index 7efe7b4..18aff6d 100644
 --- a/kpatch-build/create-diff-object.c
 +++ b/kpatch-build/create-diff-object.c
-@@ -1634,7 +1634,7 @@ static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
+@@ -1838,7 +1838,7 @@ static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
  		    !strcmp(sec->name, ".toc") ||
  		    !strcmp(sec->name, ".rodata") ||
  		    (!strncmp(sec->name, ".rodata.", 8) &&
@@ -24,5 +24,5 @@ index 8ce3b59..f37d404 100644
  		}
  	}
 -- 
-2.18.1
+2.23.0
 

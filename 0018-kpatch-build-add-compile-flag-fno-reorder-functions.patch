@@ -1,7 +1,7 @@
-From 586dcb3d2ccd8e45c78d3d140f0190ab5a78ecb3 Mon Sep 17 00:00:00 2001
+From 46a24818a2227ad1b6f644c2499415021522ce55 Mon Sep 17 00:00:00 2001
 From: Zhipeng Xie <xiezhipeng1@huawei.com>
 Date: Thu, 12 Mar 2020 06:56:21 -0400
-Subject: [PATCH 20/23] kpatch-build: add compile flag -fno-reorder-functions
+Subject: [PATCH 18/24] kpatch-build: add compile flag -fno-reorder-functions
 
 Sometimes function foo with static variables can be put in
 .text.foo section in original binary and be put in
@@ -23,18 +23,18 @@ Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
-index de448dc..ad7ab71 100755
+index c21f3ca..2ead6e4 100755
 --- a/kpatch-build/kpatch-build
 +++ b/kpatch-build/kpatch-build
-@@ -887,7 +887,7 @@ if [[ "$ARCH" = "ppc64le" ]]; then
+@@ -994,7 +994,7 @@ if [[ "$ARCH" = "ppc64le" ]]; then
  	ARCH_KCFLAGS="-mcmodel=large -fplugin=$PLUGINDIR/ppc64le-plugin.so"
  fi
  
 -export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections \
-+export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections -fno-reorder-functions\
- 		$ARCH_KCFLAGS $DEBUG_KCFLAGS ${GCC_ADD_OPTION}"
++export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections -fno-reorder-functions \
+ 		$ARCH_KCFLAGS $DEBUG_KCFLAGS"
  
  echo "Reading special section data"
 -- 
-2.18.1
+2.23.0
 

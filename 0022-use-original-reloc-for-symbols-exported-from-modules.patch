@@ -1,0 +1,36 @@
+From b841186b9f8ced6a78953c0c109138f9aef7a53a Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Thu, 12 Mar 2020 05:10:55 -0400
+Subject: [PATCH 22/24] use original reloc for symbols exported from modules
+
+symbols exported in a patch will generate a symbol version with
+object module name in Module.symvers, but the symbol is actually
+in patch module which cause livepatch symbol lookup failed.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index aa5c5c4..59d491d 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -3317,13 +3317,7 @@ static bool need_dynrela(struct lookup_table *table, struct section *sec, const
+ 			return false;
+ 		}
+ 
+-		/*
+-		 * The symbol is exported by the to-be-patched module, or by
+-		 * another module which the patched module depends on.  Use a
+-		 * dynrela because of late module loading: the patch module may
+-		 * be loaded before the to-be-patched (or other) module.
+-		 */
+-		return true;
++		return false;
+ 	}
+ 
+ 	if (symbol.global) {
+-- 
+2.23.0
+

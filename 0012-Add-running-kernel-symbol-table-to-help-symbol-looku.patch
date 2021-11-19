@@ -1,0 +1,126 @@
+From 344dfff72d5a2d574d8d7804277bf587af45743d Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Wed, 26 Feb 2020 20:28:13 -0500
+Subject: [PATCH 12/24] Add running kernel symbol table to help symbol lookup
+
+For some duplicate symbols whose section have no other
+symbols, we need running kernel symbol table to help
+symbol lookup.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/lookup.c | 73 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 73 insertions(+)
+
+diff --git a/kpatch-build/lookup.c b/kpatch-build/lookup.c
+index 238541c..2cdff67 100644
+--- a/kpatch-build/lookup.c
++++ b/kpatch-build/lookup.c
+@@ -46,6 +46,7 @@ struct object_symbol {
+ 	char *name;
+ 	int type, bind;
+ 	int sec_index;
++	unsigned long kaddr;
+ };
+ 
+ struct export_symbol {
+@@ -409,10 +410,62 @@ static void symvers_read(struct lookup_table *table, char *path)
+ 	fclose(file);
+ }
+ 
++static void ksymtab_read(struct lookup_table *table, char *path)
++{
++	FILE *file;
++	struct object_symbol *sym, *sym1, *sym2;
++	unsigned long value;
++	int i, j, idx;
++	char line[256], name[256], type[256], mod[256];
++
++	idx =  0;
++	file = fopen(path, "r");
++	if (file == NULL)
++		ERROR("fopen");
++
++	while (fgets(line, 256, file)) {
++		if (sscanf(line, "%lx %s %s [%s]\n",
++			   &value, type, name, mod) != 4)
++			continue;
++
++		if (name[0] == '$')
++			continue;
++
++		i = idx;
++		for_each_obj_symbol_continue(i, sym, table) {
++			if (!strncmp(sym->name, name, KSYM_NAME_LEN-1)) {
++				sym->kaddr = value;
++				idx = i + 1;
++				break;
++			}
++		}
++	}
++
++	for_each_obj_symbol(i, sym1, table) {
++		if (sym1->kaddr == 0)
++			continue;
++		for_each_obj_symbol(j, sym2, table) {
++			if (sym2->kaddr == 0)
++				continue;
++			if (sym1 == sym2)
++				continue;
++			if (sym1->sec_index != sym2->sec_index)
++				continue;
++			if ((long)sym1->addr - (long)sym2->addr ==
++				(long)sym1->kaddr - (long)sym2->kaddr)
++				continue;
++
++			ERROR("base mismatch(symbol offset)");
++		}
++	}
++	fclose(file);
++}
++
+ struct lookup_table *lookup_open(char *symtab_path, char *objname,
+ 				 char *symvers_path, struct kpatch_elf *kelf)
+ {
+ 	struct lookup_table *table;
++	char *kallsyms;
+ 
+ 	table = malloc(sizeof(*table));
+ 	if (!table)
+@@ -422,6 +475,9 @@ struct lookup_table *lookup_open(char *symtab_path, char *objname,
+ 	table->objname = objname;
+ 	symtab_read(table, symtab_path);
+ 	symvers_read(table, symvers_path);
++	kallsyms = getenv("KALLSYMS");
++	if (kallsyms)
++		ksymtab_read(table, kallsyms);
+ 
+ 	find_local_syms_multiple(table, kelf);
+ 
+@@ -687,6 +743,23 @@ int lookup_ref_symbol_offset(struct lookup_table *table,
+ 		}
+ 	}
+ 
++	if (orig_sym->kaddr == 0)
++		return 1;
++
++	/*find a unique symbol has kaddr*/
++	for_each_obj_symbol(i, sym, table) {
++		if (!strcmp(sym->name, lookup_sym->name) || sym->type == STT_FILE ||
++				sym->kaddr == 0 || strchr(sym->name, '.'))
++			continue;
++
++		if (!lookup_is_duplicate_symbol(table, sym->name, objname, 1)) {
++			refsym->name = sym->name;
++			refsym->addr = 0;
++			*offset = (long)orig_sym->kaddr - (long)sym->kaddr;
++			return 0;
++		}
++	}
++
+ 	return 1;
+ }
+ 
+-- 
+2.23.0
+

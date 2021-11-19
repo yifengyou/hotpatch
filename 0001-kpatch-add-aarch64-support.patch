@@ -1,0 +1,172 @@
+From 821e6cb24778bd063d1e8ad097d4bd4c81973091 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Thu, 20 Dec 2018 04:55:38 +0000
+Subject: [PATCH 01/24] kpatch: add aarch64 support
+
+1.use R_AARCH64_ABS64 for aarch64
+2.add find_special_section_data_arm64 for arm64:
+arm64 kernel have no paravirt_patch_site or orc_entry structure
+in vmlinux, we don't need to check these two struct for arm64.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/Makefile             |  4 +++
+ kpatch-build/create-diff-object.c | 14 ++++++----
+ kpatch-build/kpatch-build         | 46 +++++++++++++++++++++++++++++++
+ kpatch-build/kpatch-elf.c         |  2 +-
+ 4 files changed, 60 insertions(+), 6 deletions(-)
+
+diff --git a/kpatch-build/Makefile b/kpatch-build/Makefile
+index 50899b6..423c32a 100644
+--- a/kpatch-build/Makefile
++++ b/kpatch-build/Makefile
+@@ -14,6 +14,10 @@ ifeq ($(ARCH),x86_64)
+ SOURCES += insn/insn.c insn/inat.c
+ INSN     = insn/insn.o insn/inat.o
+ insn/%.o: CFLAGS := $(filter-out -Wconversion, $(CFLAGS))
++else ifeq ($(ARCH),aarch64)
++SOURCES += insn/insn.c insn/inat.c
++INSN     = insn/insn.o insn/inat.o
++insn/%.o: CFLAGS := $(filter-out -Wconversion, $(CFLAGS))
+ else ifeq ($(ARCH),ppc64le)
+ SOURCES += gcc-plugins/ppc64le-plugin.c
+ PLUGIN   = gcc-plugins/ppc64le-plugin.so
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 6a4848a..ca55180 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -62,6 +62,8 @@
+ 
+ #ifdef __powerpc64__
+ #define ABSOLUTE_RELA_TYPE R_PPC64_ADDR64
++#elif __aarch64__
++#define ABSOLUTE_RELA_TYPE R_AARCH64_ABS64
+ #else
+ #define ABSOLUTE_RELA_TYPE R_X86_64_64
+ #endif
+@@ -1536,7 +1538,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
+ 				continue;
+ 			}
+ 
+-#ifdef __powerpc64__
++#if defined(__powerpc64__) || defined(__aarch64__)
+ 			add_off = 0;
+ #else
+ 			if (rela->type == R_X86_64_PC32 ||
+@@ -2028,7 +2030,7 @@ static int printk_index_group_size(struct kpatch_elf *kelf, int offset)
+ 	return size;
+ }
+ 
+-#ifdef __x86_64__
++#if defined(__x86_64__) || defined(__aarch64__)
+ static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
+ {
+ 	static int size = 0;
+@@ -2177,7 +2179,7 @@ static struct special_section special_sections[] = {
+ 		.name		= ".printk_index",
+ 		.group_size	= printk_index_group_size,
+ 	},
+-#ifdef __x86_64__
++#if defined(__x86_64__) || defined(__aarch64__)
+ 	{
+ 		.name		= ".smp_locks",
+ 		.group_size	= smp_locks_group_size,
+@@ -2990,7 +2992,9 @@ static int function_ptr_rela(const struct rela *rela)
+ 		rela_toc->addend == (int)rela_toc->sym->sym.st_value &&
+ 		(rela->type == R_X86_64_32S ||
+ 		rela->type == R_PPC64_TOC16_HA ||
+-		rela->type == R_PPC64_TOC16_LO_DS));
++		rela->type == R_PPC64_TOC16_LO_DS ||
++		rela->type == R_AARCH64_ADR_PREL_PG_HI21 ||
++		rela->type == R_AARCH64_ADD_ABS_LO12_NC));
+ }
+ 
+ static bool need_dynrela(struct lookup_table *table, struct section *sec, const struct rela *rela)
+@@ -3479,7 +3483,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
+ 			rela->type = R_X86_64_PC32;
+ 		}
+ 
+-#else /* __powerpc64__ */
++#else /* __powerpc64__ || __aarch64__ */
+ {
+ 		bool found = false;
+ 
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index eedf383..ad3a079 100755
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -375,12 +375,58 @@ find_special_section_data_ppc64le() {
+ 	return
+ }
+ 
++find_special_section_data_aarch64() {
++
++	[[ "$CONFIG_JUMP_LABEL" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_j=1"
++
++	# If $AWK_OPTIONS are blank gawk would treat "" as a blank script
++	# shellcheck disable=SC2086
++	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
++		gawk --non-decimal-data $AWK_OPTIONS '
++		BEGIN { a = b = e = j =  0 }
++
++		# Set state if name matches
++		a == 0 && /DW_AT_name.* alt_instr[[:space:]]*$/ {a = 1; next}
++		b == 0 && /DW_AT_name.* bug_entry[[:space:]]*$/ {b = 1; next}
++		e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
++		j == 0 && /DW_AT_name.* jump_entry[[:space:]]*$/ {j = 1; next}
++
++		# Reset state unless this abbrev describes the struct size
++		a == 1 && !/DW_AT_byte_size/ { a = 0; next }
++		b == 1 && !/DW_AT_byte_size/ { b = 0; next }
++		e == 1 && !/DW_AT_byte_size/ { e = 0; next }
++		j == 1 && !/DW_AT_byte_size/ { j = 0; next }
++
++		# Now that we know the size, stop parsing for it
++		a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
++		b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
++		e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
++		j == 1 {printf("export JUMP_STRUCT_SIZE=%d\n", $4); j = 2}
++
++		# Bail out once we have everything
++		a == 2 && b == 2 && e == 2 && (j == 2 || skip_j) {exit}')"
++
++	[[ -n "$SPECIAL_VARS" ]] && eval "$SPECIAL_VARS"
++
++	[[ -z "$ALT_STRUCT_SIZE" ]] && die "can't find special struct alt_instr size"
++	[[ -z "$BUG_STRUCT_SIZE" ]] && die "can't find special struct bug_entry size"
++	[[ -z "$EX_STRUCT_SIZE" ]]  && die "can't find special struct exception_table_entry size"
++	[[ -z "$JUMP_STRUCT_SIZE" && "$CONFIG_JUMP_LABEL" -ne 0 ]] && die "can't find special struct jump_entry size"
++
++	return
++}
++
+ find_special_section_data() {
+ 	if [[ "$ARCH" = "ppc64le" ]]; then
+ 		find_special_section_data_ppc64le
+ 		return
+ 	fi
+ 
++	if [[ "$ARCH" = "aarch64" ]]; then
++		find_special_section_data_aarch64
++		return
++	fi
++
+ 	[[ "$CONFIG_PARAVIRT" -eq 0 ]] && AWK_OPTIONS="-vskip_p=1"
+ 	[[ "$CONFIG_UNWINDER_ORC" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_o=1"
+ 	[[ "$CONFIG_JUMP_LABEL" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_j=1"
+diff --git a/kpatch-build/kpatch-elf.c b/kpatch-build/kpatch-elf.c
+index 7e272e2..68d5c86 100644
+--- a/kpatch-build/kpatch-elf.c
++++ b/kpatch-build/kpatch-elf.c
+@@ -325,7 +325,7 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
+ 	list_for_each_entry(sym, &kelf->symbols, list) {
+ 		if (sym->type != STT_FUNC || !sym->sec || !sym->sec->rela)
+ 			continue;
+-#ifdef __powerpc64__
++#if defined(__powerpc64__) || defined(__aarch64__)
+ 		list_for_each_entry(rela, &sym->sec->rela->relas, list) {
+ 			if (!strcmp(rela->sym->name, "_mcount")) {
+ 				sym->has_func_profiling = 1;
+-- 
+2.23.0
+

@@ -1,0 +1,43 @@
+From f82f5ff61b8087e203a994da3911a1c5f3dee978 Mon Sep 17 00:00:00 2001
+From: Zhipeng Xie <xiezhipeng1@huawei.com>
+Date: Sun, 14 Nov 2021 19:53:22 +0800
+Subject: [PATCH 04/24] create-diff-object:support skip check func profiling
+ calls
+
+when kernel support livepatch without ftrace, we can skip check
+func profiling calls.
+
+Signed-off-by: Zhipeng Xie <xiezhipeng1@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index c20f75e..7247345 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -3773,6 +3773,7 @@ int main(int argc, char *argv[])
+ 	struct section *sec, *symtab;
+ 	char *orig_obj, *patched_obj, *parent_name;
+ 	char *parent_symtab, *mod_symvers, *patch_name, *output_obj;
++	char *no_profiling_calls = NULL;
+ 
+ 	memset(&arguments, 0, sizeof(arguments));
+ 	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
+@@ -3824,7 +3825,12 @@ int main(int argc, char *argv[])
+ 	kpatch_compare_correlated_elements(kelf_patched);
+ 	kpatch_mark_ignored_functions_same(kelf_patched);
+ 	kpatch_mark_ignored_sections_same(kelf_patched);
+-	kpatch_check_func_profiling_calls(kelf_patched);
++	no_profiling_calls = getenv("NO_PROFILING_CALLS");
++	if (!no_profiling_calls)
++		kpatch_check_func_profiling_calls(kelf_patched);
++	else
++		log_debug("NO_PROFILING_CALLS set\n");
++
+ 	kpatch_elf_teardown(kelf_orig);
+ 	kpatch_elf_free(kelf_orig);
+ 
+-- 
+2.23.0
+
