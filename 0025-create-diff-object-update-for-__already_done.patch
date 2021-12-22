@@ -1,0 +1,68 @@
+From 03a09bb210eb5b03ceb5a45452fa962efbd923d1 Mon Sep 17 00:00:00 2001
+From: Joe Lawrence <joe.lawrence@redhat.com>
+Date: Mon, 6 Dec 2021 09:55:06 -0500
+Subject: [PATCH] create-diff-object: update for __already_done
+
+Upstream v5.14+ kernel change a358f40600b3 ("once: implement
+DO_ONCE_LITE for non-fast-path "do once" functionality") consolidated a
+bunch of do-once macros into a common macro:
+
+  #define DO_ONCE_LITE_IF(condition, func, ...)				\
+  	({								\
+  		static bool __section(".data.once") __already_done;	\
+  		...
+
+which replaced static local variable __warned with __already_done.
+
+Update any __warned static local checks to also look for the new
+__already_done variable as well.
+
+Signed-off-by: Joe Lawrence <joe.lawrence@redhat.com>
+---
+ kpatch-build/create-diff-object.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 6a06b04..442d8f8 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -320,6 +320,7 @@ static bool is_special_static(struct symbol *sym)
+ 	static char *var_names[] = {
+ 		"__key",
+ 		"__warned",
++		"__already_done.",
+ 		"__func__",
+ 		"__FUNCTION__",
+ 		"_rs",
+@@ -610,7 +611,7 @@ out:
+  * The pattern which applies to all cases:
+  * 1) immediate move of the line number to %esi
+  * 2) (optional) string section rela
+- * 3) (optional) __warned.xxxxx static local rela
++ * 3) (optional) __warned.xxxxx or __already_done.xxxxx static local rela
+  * 4) warn_slowpath_* or __might_sleep or some other similar rela
+  */
+ static bool kpatch_line_macro_change_only(struct section *sec)
+@@ -666,7 +667,8 @@ static bool kpatch_line_macro_change_only(struct section *sec)
+ 				continue;
+ 			if (rela->string)
+ 				continue;
+-			if (!strncmp(rela->sym->name, "__warned.", 9))
++			if (!strncmp(rela->sym->name, "__warned.", 9) ||
++			    !strncmp(rela->sym->name, "__already_done.", 15))
+ 				continue;
+ 			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
+ 			   (!strcmp(rela->sym->name, "__warn_printk")) ||
+@@ -732,7 +734,8 @@ static bool kpatch_line_macro_change_only(struct section *sec)
+ 				continue;
+ 			if (toc_rela(rela) && toc_rela(rela)->string)
+ 				continue;
+-			if (!strncmp(rela->sym->name, "__warned.", 9))
++			if (!strncmp(rela->sym->name, "__warned.", 9) ||
++			    !strncmp(rela->sym->name, "__already_done.", 15))
+ 				continue;
+ 			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
+ 			   (!strcmp(rela->sym->name, "__warn_printk")) ||
+-- 
+2.23.0
+
