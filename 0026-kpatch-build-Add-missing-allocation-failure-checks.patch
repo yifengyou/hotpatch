@@ -1,0 +1,60 @@
+From e06664f379eab0b3f80c504c6656f805bba30e69 Mon Sep 17 00:00:00 2001
+From: David Vernet <void@manifault.com>
+Date: Thu, 13 Jan 2022 12:57:15 -0800
+Subject: [PATCH] kpatch-build: Add missing allocation failure checks
+
+In kpatch-build, there are a number of places where a dynamic allocation
+is performed, but the allocation is not checked for a failure. The
+common pattern in kpatch-build is to check whether the returned pointer
+is NULL, and if so, invoke the ERROR() macro to print a message and
+abort the program.
+
+kpatch_create_mcount_sections(), CORRELATE_ELEMENT(), and
+create_klp_arch_sections() all had dynamic allocations without failure
+checks. This diff adjusts those callsites to properly check for a failed
+allocation, and ERROR() accordingly.
+
+Signed-off-by: David Vernet <void@manifault.com>
+---
+ kpatch-build/create-diff-object.c | 4 ++++
+ kpatch-build/create-klp-module.c  | 2 ++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 442d8f8..01e5d63 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -979,6 +979,8 @@ do {								\
+ 		log_debug("renaming %s %s to %s\n",		\
+ 			  kindstr, e2->name, e1->name);		\
+ 		e2->name = strdup(e1->name);			\
++		if (!e2->name)				        \
++			ERROR("strdup");			\
+ 	}							\
+ } while (0)
+ 
+@@ -3688,6 +3690,8 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
+ 
+ 			/* Make a writable copy of the text section data */
+ 			newdata = malloc(sym->sec->data->d_size);
++			if (!newdata)
++				ERROR("malloc");
+ 			memcpy(newdata, sym->sec->data->d_buf, sym->sec->data->d_size);
+ 			sym->sec->data->d_buf = newdata;
+ 			insn = newdata;
+diff --git a/kpatch-build/create-klp-module.c b/kpatch-build/create-klp-module.c
+index 547e587..8ceb8f3 100644
+--- a/kpatch-build/create-klp-module.c
++++ b/kpatch-build/create-klp-module.c
+@@ -343,6 +343,8 @@ static void create_klp_arch_sections(struct kpatch_elf *kelf, char *strings)
+ 
+ 		new_size = old_size + base->data->d_size;
+ 		sec->data->d_buf = realloc(sec->data->d_buf, new_size);
++		if (!sec->data->d_buf)
++			ERROR("realloc");
+ 		sec->data->d_size = new_size;
+ 		sec->sh.sh_size = sec->data->d_size;
+ 		memcpy(sec->data->d_buf + old_size,
+-- 
+2.27.0
+

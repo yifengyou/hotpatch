@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.5
-Release:        2
+Release:        3
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -38,6 +38,8 @@ Patch0022:0022-use-original-reloc-for-symbols-exported-from-modules.patch
 Patch0023:0023-create-diff-object-create-dynamic-relocs-for-changed.patch
 Patch0024:0024-kpatch-build-support-CROSS_COMPILE.patch
 Patch0025:0025-create-diff-object-update-for-__already_done.patch
+Patch0026:0026-kpatch-build-Add-missing-allocation-failure-checks.patch
+Patch0027:0027-create-diff-object-add-support-for-.retpoline_sites-.patch
 
 BuildRequires:  gcc elfutils-libelf-devel kernel-devel git
 Requires:       bc make gcc patch bison flex openssl-devel
@@ -98,6 +100,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Wed Jan 26 2022 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.5-3
+- Type:enhancement
+- ID:NA
+- SUG:NA
+- DESC:backport upstream patch
+
 * Wed Dec 22 2021 Wentao Fan<fanwentao@huawei.com> -1:0.9.5-2
 - Type:enhancement
 - ID:NA

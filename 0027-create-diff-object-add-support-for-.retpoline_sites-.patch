@@ -1,0 +1,48 @@
+From 20c31ce6e82430ae0df0e8014058cfde83196ea0 Mon Sep 17 00:00:00 2001
+From: Markus Boehme <markubo@amazon.com>
+Date: Sat, 15 Jan 2022 01:00:39 +0100
+Subject: [PATCH] create-diff-object: add support for .retpoline_sites section
+
+Commit 134ab5bd1883 ("objtool,x86: Replace alternatives with .retpoline_sites")
+in the kernel starts keeping track of retpoline thunk call sites in a
+dedicated section rather than via the alternatives mechanism.
+
+The .retpoline_sites section needs to have its entries and relocations
+for changed symbols included in the patch ELF when building for kernel
+5.16+ with CONFIG_RETPOLINE=y.
+
+Signed-off-by: Markus Boehme <markubo@amazon.com>
+---
+ kpatch-build/create-diff-object.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 01e5d63..bbb40ed 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -2233,6 +2233,11 @@ static int static_call_sites_group_size(struct kpatch_elf *kelf, int offset)
+ 
+ 	return size;
+ }
++
++static int retpoline_sites_group_size(struct kpatch_elf *kelf, int offset)
++{
++	return 4;
++}
+ #endif
+ #ifdef __powerpc64__
+ static int fixup_entry_group_size(struct kpatch_elf *kelf, int offset)
+@@ -2349,6 +2354,10 @@ static struct special_section special_sections[] = {
+ 		.name		= ".static_call_sites",
+ 		.group_size	= static_call_sites_group_size,
+ 	},
++	{
++		.name		= ".retpoline_sites",
++		.group_size	= retpoline_sites_group_size,
++	},
+ #endif
+ #ifdef __powerpc64__
+ 	{
+-- 
+2.27.0
+
