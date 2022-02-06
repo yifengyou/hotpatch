@@ -1,0 +1,30 @@
+From 4d8c8102de49534bd538bb20319680ce1f1ff9ef Mon Sep 17 00:00:00 2001
+From: Artem Savkov <asavkov@redhat.com>
+Date: Thu, 3 Feb 2022 11:59:24 +0100
+Subject: [PATCH] Fix sym->type condition in locals_match()
+
+Second loop in locals_match() checks table_sym->type instead of
+sym->type.
+
+Fixes: 7207687 Switch to per-file lookup table pointers.
+Signed-off-by: Artem Savkov <asavkov@redhat.com>
+---
+ kpatch-build/lookup.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kpatch-build/lookup.c b/kpatch-build/lookup.c
+index 0323c61..06f4b38 100644
+--- a/kpatch-build/lookup.c
++++ b/kpatch-build/lookup.c
+@@ -131,7 +131,7 @@ static bool locals_match(struct lookup_table *table, int idx,
+ 			break;
+ 		if (sym->bind != STB_LOCAL)
+ 			continue;
+-		if (sym->type != STT_FUNC && table_sym->type != STT_OBJECT)
++		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
+ 			continue;
+ 		/*
+ 		 * Symbols which get discarded at link time are missing from
+-- 
+2.27.0
+
