@@ -461,65 +461,6 @@ function fn_verify_input()
     return 0
 }
 
-
-#########################################################
-#    Description:  fn_init_module_build
-#    Input:  
-#    Return: 0-success,1-failed
-#########################################################
-function fn_init_module_build()
-{
-    local l_modulesrc=$1
-    local l_module_makefile=$2
-    local module=
-
-    module=`basename $l_modulesrc`
-
-    if [ ! -e $G_PRIVATE_MODULE ];then
-        mkdir -p $G_PRIVATE_MODULE
-    fi
-
-    rm -rf $G_PRIVATE_MODULE/*
-    if [ $? -ne 0 ];then
-        echo "error: remove $G_PRIVATE_MODULE/$module or Makefile failed"
-        return 1
-    fi
-
-    #make a new softlink 或改成链接
-    ln -sf $l_modulesrc $G_PRIVATE_MODULE
-    if [ $? -ne 0 ];then
-        echo "error: copy $l_modulesrc to $G_PRIVATE_MODULE failed"
-        return 1
-    fi
-    if [ -z "$l_module_makefile" ];then
-        l_module_makefile=$l_modulesrc/Makefile
-    fi
-
-    echo "${G_KPLICE_PWD_FIELD}=${l_modulesrc}/" >> $G_KPATCH_FLAGS
-    echo "${G_PRIVATE_MODULE_SRC_FIELD}=$(dirname $l_module_makefile)/" >> $G_KPATCH_FLAGS
-
-    fMake=`find ${G_PRIVATE_MODULE}/${module}/ -name Makefile`
-    #if no Makefile found in module dir
-    if [ -z "$fMake" ] && [ ! -f "$l_module_makefile" ];then
-        echo "[ERROR] no Makefilie found in module dir $l_modulesrc"
-        return 1
-    fi
-    #filter CC in module Makefile     
-    if [ -n "$fMake" ];then
-        cat $fMake|grep -v '^#'|grep '^[ ,]CC[ ,:,=,?]'
-        if [ $? -eq 0 ];then
-            echo "[WARN] ${module}'s Makefile defined CC,please make sure \"CC:=\$(G_KSPLICECC) \$(CC)\" "
-        fi
-    fi
-    if [ -f "$l_module_makefile" ];then
-        cat $l_module_makefile|grep -v '^#'|grep '^[ ,]CC[ ,:,=,?]'
-        if [ $? -eq 0 ];then
-            echo "[WARN] ${module}'s Makefile defined CC,please make sure \"CC:=\$(G_KSPLICECC) \$(CC)\" "
-        fi
-    fi
-}
-
-
 #########################################################
 #    Description:  fn_makepatch
 #    Input:  
@@ -536,11 +477,6 @@ function fn_makepatch()
     if [ -d "$G_MODULE_SRC" ];then
         echo "make out of tree module hotpatch"
         G_PATCH_SRC=$G_MODULE_SRC
-        #fn_init_module_build $G_MODULE_SRC $G_MODULE_MAKEFILE
-        #if [ $? -ne 0 ];then
-        #    echo "error: init module build failed"
-        #    return 1
-        #fi
         l_extra_module="-m $G_MODULE_SRC"
         USERMODBUILDDIR=$G_MODULE_SRC
     fi 
