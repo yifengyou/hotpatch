@@ -1,0 +1,27 @@
+From 72d80c02e16d7558bea6512116bac2b9461bf879 Mon Sep 17 00:00:00 2001
+From: hubin <hubin73@huawei.com>
+Date: Tue, 10 May 2022 16:12:29 +0800
+Subject: [PATCH] kpatch-build: do not copy linux scripts when building OOT
+ module hotpatch
+
+Signed-off-by: hubin <hubin73@huawei.com>
+---
+ kpatch-build/kpatch-build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index ce163e5..dc5f5a5 100644
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -955,7 +955,7 @@ grep -q "CONFIG_GCC_PLUGIN_RANDSTRUCT=y" "$CONFIGFILE" && die "kernel option 'CO
+ # support extended ELF sections.  Disable the BTF typeinfo generation in
+ # link-vmlinux.sh and Makefile.modfinal since kpatch doesn't care about
+ # that anyway.
+-if grep -q "CONFIG_DEBUG_INFO_BTF=y" "$CONFIGFILE" ; then
++if grep -q "CONFIG_DEBUG_INFO_BTF=y" "$CONFIGFILE" && [[ -z "$OOT_MODULE" ]] ; then
+ 	cp -f "$SRCDIR/scripts/link-vmlinux.sh" "$TEMPDIR/link-vmlinux.sh" || die
+ 	sed -i 's/CONFIG_DEBUG_INFO_BTF/DISABLED_FOR_KPATCH_BUILD/g' "$SRCDIR"/scripts/link-vmlinux.sh || die
+ 
+-- 
+2.31.0.windows.1
+
