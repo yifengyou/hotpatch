@@ -1,0 +1,29 @@
+From f1de68ea87426e7ed65dc615a46f5ce1d15df994 Mon Sep 17 00:00:00 2001
+From: hubin <hubin73@huawei.com>
+Date: Tue, 10 May 2022 15:27:52 +0800
+Subject: [PATCH 3/9] kpatch-build: update find_parent_obj to avoid error that
+ two parent match same object
+
+Signed-off-by: hubin <hubin73@huawei.com>
+---
+ kpatch-build/kpatch-build | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/kpatch-build/kpatch-build b/kpatch-build/kpatch-build
+index ba33a3e..ce163e5 100644
+--- a/kpatch-build/kpatch-build
++++ b/kpatch-build/kpatch-build
+@@ -527,8 +527,8 @@ find_parent_obj() {
+ 			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
+ 		fi
+ 		if [[ "$num" -eq 0 ]]; then
+-			parent="$(find $USERMODBUILDDIR -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fv "$pdir/.${file}.cmd" | head -n1)"
+-			num="$(find $USERMODBUILDDIR -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fvc "$pdir/.${file}.cmd")"
++			parent="$(find $USERMODBUILDDIR -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | filter_parent_obj "$pdir" "${file}" | head -n1)"
++			num="$(find $USERMODBUILDDIR -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | filter_parent_obj "$pdir" "${file}" | wc -l)"
+ 			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
+ 		fi
+ 	else
+-- 
+2.31.0.windows.1
+

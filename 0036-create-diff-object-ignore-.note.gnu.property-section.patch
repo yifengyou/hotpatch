@@ -1,0 +1,36 @@
+From de34b86536bde114f481a73fdbf2f58b643c3e48 Mon Sep 17 00:00:00 2001
+From: hubin <hubin73@huawei.com>
+Date: Tue, 10 May 2022 15:28:46 +0800
+Subject: [PATCH 8/9] create-diff-object: ignore .note.gnu.property section
+
+Linux GABI introduced new .note.gnu.property section which contains a program
+property note which describes special handling requirements for linker and run-time loader.
+
+Linux GABI specifies 2 types of entries:
+GNU_PROPERTY_STACK_SIZE and GNU_PROPERTY_NO_COPY_ON_PROTECTED
+
+These entries should not take effect when using live-patching, thus, ignore the change of
+this section
+
+Signed-off-by: hubin <hubin73@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 03c877e..c2ecefa 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -3063,7 +3063,8 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf,
+ 			if (strcmp(sec->name, "__tracepoints") &&
+ 			    strcmp(sec->name, "__tracepoints_ptrs") &&
+ 			    strcmp(sec->name, "__tracepoints_strings") &&
+-			    strcmp(sec->name, "__patchable_function_entries"))
++			    strcmp(sec->name, "__patchable_function_entries") &&
++			    strcmp(sec->name, ".note.gnu.property"))
+ 				continue;
+ 
+ 			sec->status = SAME;
+-- 
+2.31.0.windows.1
+

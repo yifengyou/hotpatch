@@ -1,0 +1,27 @@
+From 83b98afd69c8be39587bfcd2260f03b2b3082a94 Mon Sep 17 00:00:00 2001
+From: hubin <hubin73@huawei.com>
+Date: Tue, 10 May 2022 15:28:17 +0800
+Subject: [PATCH 5/9] kpatch-macros: replace __section with __kpatch_section in
+ kpatch macro definition
+
+Signed-off-by: hubin <hubin73@huawei.com>
+---
+ kmod/patch/kpatch-macros.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kmod/patch/kpatch-macros.h b/kmod/patch/kpatch-macros.h
+index ee455d2..c20b061 100644
+--- a/kmod/patch/kpatch-macros.h
++++ b/kmod/patch/kpatch-macros.h
+@@ -13,7 +13,7 @@
+ #endif
+ 
+ #define KPATCH_IGNORE_STATIC(_static) \
+-	char *__UNIQUE_ID(kpatch_ignore_static_) __section(.kpatch.ignore.statics) = _static;
++	char *__UNIQUE_ID(kpatch_ignore_static_) __kpatch_section(.kpatch.ignore.statics) = _static;
+ 
+ 
+ /*
+-- 
+2.31.0.windows.1
+

@@ -1,0 +1,27 @@
+From e1b12b68efc7de9e3e3db52ceda2c1b713dc7cb7 Mon Sep 17 00:00:00 2001
+From: hubin <hubin73@huawei.com>
+Date: Tue, 10 May 2022 15:28:34 +0800
+Subject: [PATCH 7/9] create-diff-object: fix null pointer dereference in
+ kpatch_ignore_debug_section
+
+Signed-off-by: hubin <hubin73@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 8d3f377..03c877e 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -2796,7 +2796,7 @@ static void kpatch_ignore_debug_sections(struct kpatch_elf *kelf)
+ 		if (is_debug_section(sec)) {
+ 			sec->include = 0;
+ 			sec->status = SAME;
+-			if (!is_rela_section(sec)) {
++			if (!is_rela_section(sec) && sec->secsym) {
+ 				sec->secsym->include = 0;
+ 				sec->secsym->status = SAME;
+ 			}
+-- 
+2.31.0.windows.1
+

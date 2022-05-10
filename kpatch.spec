@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.5
-Release:        5
+Release:        6
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -41,6 +41,15 @@ Patch0025:0025-create-diff-object-update-for-__already_done.patch
 Patch0026:0026-kpatch-build-Add-missing-allocation-failure-checks.patch
 Patch0027:0027-create-diff-object-add-support-for-.retpoline_sites-.patch
 Patch0028:0028-Fix-sym-type-condition-in-locals_match.patch
+Patch0029:0029-livepatch-patch-hook-disable-HAVE_SIMPLE_ENABLE-to-k.patch
+Patch0030:0030-kpatch-build-add-KBUILD_MODPOST_WARN-1-to-avoid-modp.patch
+Patch0031:0031-kpatch-build-update-find_parent_obj-to-avoid-error-t.patch
+Patch0032:0032-create-diff-object-fix-segment-fault-when-using-KPAT.patch
+Patch0033:0033-kpatch-macros-replace-__section-with-__kpatch_sectio.patch
+Patch0034:0034-create-diff-object-ignore-changed-of-section-__patch.patch
+Patch0035:0035-create-diff-object-fix-null-pointer-dereference-in-k.patch
+Patch0036:0036-create-diff-object-ignore-.note.gnu.property-section.patch
+Patch0037:0037-create-diff-object-skip-creating-.kpatch.arch-sectio.patch
 
 BuildRequires:  gcc elfutils-libelf-devel kernel-devel git
 Requires:       bc make gcc patch bison flex openssl-devel
@@ -101,6 +110,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Tue May 10 2022 Bin Hu <hubin73@huawei.com> -1:0.9.5-6
+- Type:bugfix
+- ID:NA
+- SUG:NA
+- DESC:fix segment fault and hotpatch compilation problem when using openEuler 22.03 LTS kernel
+
 * Wed Mar 30 2022 Zhipeng Xie<xiezhipeng1@huawei.com> -1:0.9.5-5
 - Type:clean code
 - ID:NA
