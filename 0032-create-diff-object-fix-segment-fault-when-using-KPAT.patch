@@ -1,0 +1,34 @@
+From b1be16f5c42bae41f15a2579cb6ce39406648e19 Mon Sep 17 00:00:00 2001
+From: hubin <hubin73@huawei.com>
+Date: Tue, 10 May 2022 15:28:00 +0800
+Subject: [PATCH 4/9] create-diff-object: fix segment fault when using
+ KPATCH_FORCE_UNSAFE
+
+Signed-off-by: hubin <hubin73@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index bbb40ed..2cca6f3 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -1969,9 +1969,14 @@ static void kpatch_include_force_elements(struct kpatch_elf *kelf)
+ 				continue;
+ 			}
+ 			/* .rela.kpatch.force */
+-			list_for_each_entry(rela, &sec->relas, list)
++			list_for_each_entry(rela, &sec->relas, list) {
++				if (rela->sym->status != CHANGED) {
++					ERROR("function '%s' marked with KPATCH_FORCE_UNSAFE, but not changed! check your patch.\n",
++						rela->sym->name);
++				}
+ 				log_normal("function '%s' marked with KPATCH_FORCE_UNSAFE!\n",
+ 				           rela->sym->name);
++			}
+ 		}
+ 	}
+ 
+-- 
+2.31.0.windows.1
+

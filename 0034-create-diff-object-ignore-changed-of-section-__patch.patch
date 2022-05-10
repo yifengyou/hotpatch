@@ -1,0 +1,35 @@
+From 41334ab046ad2c89324b61f76b262228a6bc36ad Mon Sep 17 00:00:00 2001
+From: hubin <hubin73@huawei.com>
+Date: Tue, 10 May 2022 15:28:26 +0800
+Subject: [PATCH 6/9] create-diff-object: ignore changed of section
+ __patchable_function_entries
+
+Linux 5.10 aarch64 uses -fpatchable-function-entry=N to generate N NOPs at the
+beginning of each function, Section __patchable_function_entries is generated
+to record the starting address of these NOPs.
+
+Section __patchable_function_entries will change if the number of functions
+changed during making hotpatch, here we just ignore the change of this section.
+
+Signed-off-by: hubin <hubin73@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 2cca6f3..8d3f377 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -3062,7 +3062,8 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf,
+ 		list_for_each_entry(sec, &kelf->sections, list) {
+ 			if (strcmp(sec->name, "__tracepoints") &&
+ 			    strcmp(sec->name, "__tracepoints_ptrs") &&
+-			    strcmp(sec->name, "__tracepoints_strings"))
++			    strcmp(sec->name, "__tracepoints_strings") &&
++			    strcmp(sec->name, "__patchable_function_entries"))
+ 				continue;
+ 
+ 			sec->status = SAME;
+-- 
+2.31.0.windows.1
+
