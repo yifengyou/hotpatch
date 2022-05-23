@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.5
-Release:        8
+Release:        9
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -51,6 +51,8 @@ Patch0035:0035-create-diff-object-fix-null-pointer-dereference-in-k.patch
 Patch0036:0036-create-diff-object-ignore-.note.gnu.property-section.patch
 Patch0037:0037-create-diff-object-skip-creating-.kpatch.arch-sectio.patch
 Patch0038:0038-kpatch-build-do-not-copy-linux-scripts-when.patch
+Patch0039:0039-create-diff-object-ignore-change-of-certain.patch
+Patch0040:0040-create-diff-object-allow-__jump_table-section.patch
 
 BuildRequires:  gcc elfutils-libelf-devel kernel-devel git
 Requires:       bc make gcc patch bison flex openssl-devel
@@ -111,6 +113,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Mon May 23 2022 Bin Hu <hubin73@huawei.com> -1:0.9.5-9
+- Type:bugfix
+- ID:NA
+- SUG:NA
+- DESC:create-diff-object: fix some hotpatch compilation problems
+
 * Thu May 12 2022 Bin Hu <hubin73@huawei.com> -1:0.9.5-8
 - Type:bugfix
 - ID:NA

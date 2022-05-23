@@ -1,0 +1,27 @@
+From 556db3ad9deab83942621e56accc711427224ca5 Mon Sep 17 00:00:00 2001
+From: hubin <hubin73@huawei.com>
+Date: Mon, 23 May 2022 17:08:50 +0800
+Subject: [PATCH] create-diff-object: allow __jump_table section change for
+ module hotpatch
+
+Signed-off-by: hubin <hubin73@huawei.com>
+---
+ kpatch-build/create-diff-object.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kpatch-build/create-diff-object.c b/kpatch-build/create-diff-object.c
+index 7fabf4d..d7a6789 100644
+--- a/kpatch-build/create-diff-object.c
++++ b/kpatch-build/create-diff-object.c
+@@ -3493,7 +3493,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
+ 			 * special section init code (e.g., apply_paravirt)
+ 			 * runs due to late module patching.
+ 			 */
+-			if (!KLP_ARCH && !vmlinux && special)
++			if (!KLP_ARCH && !vmlinux && special && strcmp(sec->base->name, "__jump_table"))
+ 				ERROR("unsupported dynrela reference to symbol '%s' in module-specific special section '%s'",
+ 				      rela->sym->name, sec->base->name);
+ 
+-- 
+2.31.0.windows.1
+
