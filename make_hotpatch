@@ -196,8 +196,8 @@ function fn_check_jobs()
 #########################################################
 function fn_check_patch(){
     local l_patch=$1
-    if [ ! -f $1 ];then
-        echo "error:patch file $1 not exist"
+    if [ ! -f "$1" ];then
+        echo "error:patch file $1 does not exist"
         return 1
     fi
     G_PATCHFILE=$l_patch
@@ -232,7 +232,7 @@ function fn_check_kernelsrc()
     local l_kernelsrc=$1
 
     if [ ! -d "$l_kernelsrc" ];then
-        echo "error: kernel src $l_kernelsrc is not exist, check kernel src failed"
+        echo "error: kernel src $l_kernelsrc does not exist, check kernel src failed"
         return 1
     fi
     G_KERNEL_SRC=$l_kernelsrc
@@ -250,7 +250,7 @@ function fn_check_modulesrc()
     local l_modulesrc=$1
 
     if [ ! -d "$l_modulesrc" ];then
-        echo "error: module src $l_modulesrc is not exist, check module src failed"
+        echo "error: module src $l_modulesrc does not exist, check module src failed"
         return 1
     fi
     echo "$l_modulesrc" | grep -q ^/ 
@@ -272,7 +272,7 @@ function fn_check_makefile()
     local l_module_makefile=$1
 
     if [ ! -f "$l_module_makefile" ] && [ "$(basename $l_module_makefile)" = "Makefile" ];then
-        echo "error: module makefile $l_module_makefile is not exist or makefile name is not Makefile, check module makefile failed"
+        echo "error: module makefile $l_module_makefile does not exist or makefile name is not Makefile, check module makefile failed"
         return 1
     fi
     echo "$l_module_makefile" | grep -q ^/
@@ -294,7 +294,7 @@ function fn_check_extra_flags()
     local l_extra_flags=$1
 
     if [ ! -f "$l_extra_flags" ];then
-        echo "error: extra flags file $l_extra_flags is not exist, check extra flags failed"
+        echo "error: extra flags file $l_extra_flags does not exist, check extra flags failed"
         return 1
     fi
     G_EXT_FLAGS="`readlink -f ${l_extra_flags}`"
@@ -508,7 +508,7 @@ function fn_makepatch()
             echo "error: do not modify the header file"
             return 1
         fi
-        if [ -f $G_PATCHFILE ];then
+        if [ -f "$G_PATCHFILE" ];then
             echo "make patch $G_PATCHFILE"
         else
             echo "no change detected"
