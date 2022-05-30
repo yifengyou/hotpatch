@@ -1,7 +1,7 @@
 Name:           kpatch
 Epoch:          1
 Version:        0.9.5
-Release:        9
+Release:        10
 Summary:        A Linux dynamic kernel patching infrastructure
 
 License:        GPLv2
@@ -113,6 +113,12 @@ popd
 %{_mandir}/man1/*.1.gz
 
 %changelog
+* Mon May 30 2022 Bin Hu <hubin73@huawei.com> -1:0.9.5-10
+- Type:bugfix
+- ID:NA
+- SUG:NA
+- DESC:make_hotpatch: fix some grammar error
+
 * Mon May 23 2022 Bin Hu <hubin73@huawei.com> -1:0.9.5-9
 - Type:bugfix
 - ID:NA
